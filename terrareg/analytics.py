@@ -54,10 +54,11 @@ class AnalyticsEngine:
         ).join(
             db.module_provider,
             db.module_version.c.module_provider_id == db.module_provider.c.id
+        ).join(
+            db.namespace,
+            db.module_provider.c.namespace_id == db.namespace.c.id
         ).where(
-            db.module_provider.c.namespace == module_provider._module._namespace.name,
-            db.module_provider.c.module == module_provider._module.name,
-            db.module_provider.c.provider == module_provider.name
+            db.module_provider.c.id == module_provider.pk
         )
 
     @staticmethod
@@ -92,7 +93,7 @@ class AnalyticsEngine:
         auth_token: str):
         """Store information about module version download in database."""
 
-        # If terraform version not present from header,
+        # If Terraform version not present from header,
         # attempt to determine from user agent
         if not terraform_version:
             user_agent_match = re.match(r'^Terraform/(\d+\.\d+\.\d+)$', user_agent)
@@ -135,7 +136,7 @@ class AnalyticsEngine:
         # Initial query to select all analytics joined to module version and module provider
         select = sqlalchemy.select(
             db.module_provider.c.id,
-            db.module_provider.c.namespace,
+            db.namespace.c.namespace,
             db.module_provider.c.module,
             db.module_provider.c.provider,
             db.analytics.c.analytics_token
@@ -147,6 +148,9 @@ class AnalyticsEngine:
         ).join(
             db.module_provider,
             db.module_version.c.module_provider_id == db.module_provider.c.id
+        ).join(
+            db.namespace,
+            db.module_provider.c.namespace_id==db.namespace.c.id
         ).where(
             # Filter unpublished and beta versions
             db.module_version.c.published == True,
@@ -354,6 +358,42 @@ class AnalyticsEngine:
             ))
 
     @classmethod
+    def get_module_provider_version_statistics(cls):
+        """Return number of major, minor and patch releases for a module version"""
+        major_count = 0
+        minor_count = 0
+        patch_count = 0
+        for namespace in terrareg.models.Namespace.get_all(only_published=True):
+            for module in namespace.get_all_modules():
+                for module_provider in module.get_providers():
+                    versions = module_provider.get_versions(include_beta=False, include_unpublished=False)
+                    # Reverse versions, so that the they increase in value
+                    versions.reverse()
+
+                    # Setup variable to hold previous version
+                    previous_version = None
+                    for module_version in versions:
+                        # Split version number by . and convert each version part to integers
+                        version_split = [int(v) for v in module_version.version.split('.')]
+                        # If this is the first version, count as a major release,
+                        # otherwise, check if major version has increased since last seen release
+                        if previous_version is None or version_split[0] > previous_version[0]:
+                            major_count += 1
+                        # Check if version is a minor change
+                        elif version_split[1] > previous_version[1]:
+                            minor_count += 1
+                        # Check if version is a patch change
+                        elif version_split[2] > previous_version[2]:
+                            patch_count += 1
+                        else:
+                            print('Unable to determine version change between:', previous_version, 'and', version_split)
+
+                        previous_version = version_split
+
+        # Return all 3 counts
+        return major_count, minor_count, patch_count
+
+    @classmethod
     def get_prometheus_metrics(cls):
         """Return prometheus metrics for modules and usage."""
         prometheus_generator = PrometheusGenerator()
@@ -365,6 +405,29 @@ class AnalyticsEngine:
         )
         module_count_metric.add_data_row(value=terrareg.models.ModuleProvider.get_total_count(only_published=True))
         prometheus_generator.add_metric(module_count_metric)
+
+        major_count, minor_count, patch_count = cls.get_module_provider_version_statistics()
+        version_major_count_metric = PrometheusMetric(
+            name='module_version_major_count',
+            type_='counter',
+            help='Total number of major versions released'
+        )
+        version_major_count_metric.add_data_row(value=major_count)
+        prometheus_generator.add_metric(version_major_count_metric)
+        version_minor_count_metric = PrometheusMetric(
+            name='module_version_minor_count',
+            type_='counter',
+            help='Total number of minor versions released'
+        )
+        version_minor_count_metric.add_data_row(value=minor_count)
+        prometheus_generator.add_metric(version_minor_count_metric)
+        version_patch_count_metric = PrometheusMetric(
+            name='module_version_patch_count',
+            type_='counter',
+            help='Total number of patch versions released'
+        )
+        version_patch_count_metric.add_data_row(value=patch_count)
+        prometheus_generator.add_metric(version_patch_count_metric)
 
         module_provider_usage_metric = PrometheusMetric(
             'module_provider_usage',

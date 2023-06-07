@@ -5,6 +5,7 @@ from unittest import mock
 import pytest
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.select import Select
+from test import mock_create_audit_event
 
 from test.selenium import SeleniumTest
 from terrareg.models import ModuleVersion, Namespace, Module, ModuleProvider
@@ -14,6 +15,7 @@ class TestInitialSetup(SeleniumTest):
 
     # Disable test data
     _TEST_DATA = {}
+    _USER_GROUP_DATA = None
 
     @classmethod
     def setup_class(cls):
@@ -22,13 +24,15 @@ class TestInitialSetup(SeleniumTest):
         cls._config_allow_module_uploads_mock = mock.patch('terrareg.config.Config.ALLOW_MODULE_HOSTING', True)
         cls._config_publish_api_keys_mock = mock.patch('terrareg.config.Config.PUBLISH_API_KEYS', [])
         cls._config_admin_authentication_key_mock = mock.patch('terrareg.config.Config.ADMIN_AUTHENTICATION_TOKEN', '')
-        cls._config_secret_key_mock = mock.patch('terrareg.config.Config.SECRET_KEY', '')
+        cls._config_auto_create_namespace_mock = mock.patch('terrareg.config.Config.AUTO_CREATE_NAMESPACE', True)
+        cls._config_auto_create_module_provider_mock = mock.patch('terrareg.config.Config.AUTO_CREATE_MODULE_PROVIDER', True)
 
         cls.register_patch(cls._config_upload_api_keys_mock)
         cls.register_patch(cls._config_allow_module_uploads_mock)
         cls.register_patch(cls._config_publish_api_keys_mock)
         cls.register_patch(cls._config_admin_authentication_key_mock)
-        cls.register_patch(cls._config_secret_key_mock)
+        cls.register_patch(cls._config_auto_create_namespace_mock)
+        cls.register_patch(cls._config_auto_create_module_provider_mock)
 
         super(TestInitialSetup, cls).setup_class()
 
@@ -72,16 +76,21 @@ class TestInitialSetup(SeleniumTest):
 
         self.check_progress_bar(0)
 
-        # Set auth token
-        with self.update_mock(self._config_admin_authentication_key_mock, 'new', 'admin-setup-password'):
-            # Reload page and ensure admin password is striked through
-            self.selenium_instance.get(self.get_url('/initial-setup'))
+        # Set auth methods
+        for auth_mock_updates in [
+            (self._config_admin_authentication_key_mock, 'new', 'admin-setup-password'),
+            (self._mock_openid_connect_is_enabled, 'return_value', True),
+            (self._mock_saml2_is_enabled, 'return_value', True)
+            ]:
+            with self.update_mock(*auth_mock_updates):
+                # Reload page and ensure admin password is striked through
+                self.selenium_instance.get(self.get_url('/initial-setup'))
 
-            admin_token_li = self.wait_for_element(By.ID, 'setup-step-auth-vars-admin-authentication-token')
-            assert self.is_striked_through(admin_token_li) == True
-            secret_key_li = self.wait_for_element(By.ID, 'setup-step-auth-vars-secret-key')
-            assert self.is_striked_through(secret_key_li) == False
-            self.check_progress_bar(10)
+                admin_token_li = self.wait_for_element(By.ID, 'setup-step-auth-vars-admin-authentication-token')
+                assert self.is_striked_through(admin_token_li) == True
+                secret_key_li = self.wait_for_element(By.ID, 'setup-step-auth-vars-secret-key')
+                assert self.is_striked_through(secret_key_li) == False
+                self.check_progress_bar(10)
 
         # Set secret key
         with self.update_mock(self._config_secret_key_mock, 'new', 'abcdefabcdef'):
@@ -113,19 +122,50 @@ class TestInitialSetup(SeleniumTest):
         # Login as admin
         self.perform_admin_authentication('admin-setup-password')
 
-    def _test_create_module_step(self):
-        """Test create module step."""
+    def _test_create_namespace_step(self):
+        """Test create namespace step."""
         # Ensure user has been redirected back to initial setup
         self.assert_equals(lambda: self.selenium_instance.current_url, self.get_url('/initial-setup'))
-        create_module_card = self.wait_for_element(By.ID, 'setup-create-module')
+        create_module_card = self.wait_for_element(By.ID, 'setup-create-namespace')
         create_module_card_content = self.wait_for_element(By.CLASS_NAME, 'card-content', parent=create_module_card)
-        self.check_only_card_is_displayed('create-module')
+        self.check_only_card_is_displayed('create-namespace')
 
         self.check_progress_bar(40)
 
         # Click link to create module
         create_module_card_content.find_element(By.TAG_NAME, 'a').click()
-        assert self.selenium_instance.current_url == self.get_url('/create-module')
+        assert self.selenium_instance.current_url == self.get_url('/create-namespace?initial_setup=1')
+
+        # Fill out namespace form and click create
+        self.selenium_instance.find_element(By.ID, 'namespace-name').send_keys('unittestnamespace')
+        self.selenium_instance.find_element(By.ID, 'create-namespace-form').find_element(By.TAG_NAME, 'button').click()
+
+        # Ensure user is redirected back to initial-setup page
+        self.assert_equals(lambda: self.selenium_instance.current_url, self.get_url('/initial-setup'))
+
+    def _test_create_module_step(self):
+        """Test create module step."""
+        self.selenium_instance.get(self.get_url('/initial-setup'))
+
+        self.assert_equals(lambda: self.selenium_instance.current_url, self.get_url('/initial-setup'))
+        create_module_card = self.wait_for_element(By.ID, 'setup-create-module')
+        create_module_card_content = self.wait_for_element(By.CLASS_NAME, 'card-content', parent=create_module_card)
+        self.check_only_card_is_displayed('create-module')
+
+        self.check_progress_bar(50)
+
+        # Click link to create module
+        create_module_card_content.find_element(By.TAG_NAME, 'a').click()
+        assert self.selenium_instance.current_url == self.get_url('/create-module?initial_setup=1')
+
+        # Fill out form to create module and submit
+        self.selenium_instance.find_element(By.ID, 'create-module-module').send_keys('setupmodulename')
+        self.selenium_instance.find_element(By.ID, 'create-module-provider').send_keys('setupprovider')
+        self.selenium_instance.find_element(By.ID, 'create-module-git-tag-format').send_keys('v{version}')
+        self.selenium_instance.find_element(By.ID, 'create-module-form').find_element(By.TAG_NAME, 'button').click()
+
+        # Ensure user is redirected back to initial-setup page
+        self.assert_equals(lambda: self.selenium_instance.current_url, self.get_url('/initial-setup'))
 
     def _test_index_version_git_step(self, module_provider):
         """Test step for importing a module version from git."""
@@ -147,7 +187,7 @@ class TestInitialSetup(SeleniumTest):
         index_module_verison_link = index_git_card_content.find_element(By.TAG_NAME, 'a')
         assert index_module_verison_link.get_attribute('href') == self.get_url('/modules/unittestnamespace/setupmodulename/setupprovider#integrations')
 
-    def _test_index_version_upload_step(self, module_provider):
+    def _test_index_version_upload_step(self, module_provider, upload_api_key_enabled, publish_api_key_enabled):
         """Test step for uploading a module version."""
         module_provider.update_attributes(repo_clone_url_template=None)
 
@@ -159,7 +199,7 @@ class TestInitialSetup(SeleniumTest):
         self.check_progress_bar(60)
 
         expected_upload_instructions = [
-            'Create a zip/tar.gz archive with the contents of the terraform module',
+            'Create a zip/tar.gz archive with the contents of the Terraform module',
             f'Upload the module by performing a POST request to the upload endpoint: {self.get_url("/v1/terrareg/modules/unittestnamespace/setupmodulename/setupprovider/${version}/upload")}\n'
             'The archive file should be supplied as a file attachment.',
             f'Publish version of the module by performing a POST request to the \'publish\' endpoint: {self.get_url("/v1/terrareg/modules/unittestnamespace/setupmodulename/setupprovider/${version}/publish")}'
@@ -167,21 +207,27 @@ class TestInitialSetup(SeleniumTest):
         for index_upload_li in index_upload_card_content.find_elements(By.TAG_NAME, 'li'):
             assert index_upload_li.text == expected_upload_instructions.pop(0)
 
+        upload_api_key_argument = '-H "X-Terrareg-ApiKey: <Insert your UPLOAD_API_KEY>" ' if upload_api_key_enabled else ""
+        publish_api_key_argument = '-H "X-Terrareg-ApiKey: <Insert your PUBLISH_API_KEY>" ' if publish_api_key_enabled else ""
+
         # Check example command for uploading/publishing version
         upload_command = index_upload_card_content.find_element(By.ID, 'setup-step-upload-module-version-example-command')
-        assert upload_command.text == (
-            '# Zip module\n'
-            'cd path/to/module\n'
-            'zip * ../module.zip\n\n'
-            'version=1.0.0\n\n'
-            '# Upload module version\n'
-            'curl -X POST \\\n'
-            f'    "{self.get_url("/v1/terrareg/modules/unittestnamespace/setupmodulename/setupprovider/${version}/upload")}" \\\n'
-            '    -F file=@../module.zip\n\n'
-            '# Publish module version\n'
-            'curl -X POST \\\n'
-            f'    "{self.get_url("/v1/terrareg/modules/unittestnamespace/setupmodulename/setupprovider/${version}/publish")}"'
-        )
+        assert upload_command.text == f"""
+# Zip module
+cd path/to/module
+zip -r ../module.zip *
+
+version=1.0.0
+
+# Upload module version
+curl -X POST {upload_api_key_argument}\\
+    "{self.get_url("/v1/terrareg/modules/unittestnamespace/setupmodulename/setupprovider/${version}/upload")}" \\
+    -F file=@../module.zip
+
+# Publish module version
+curl -X POST {publish_api_key_argument}\\
+    "{self.get_url("/v1/terrareg/modules/unittestnamespace/setupmodulename/setupprovider/${version}/publish")}"
+""".strip()
 
     def _test_publish_module_version_upload_step(self, module_provider):
         """Test index module version upload with unpublished version."""
@@ -245,7 +291,11 @@ class TestInitialSetup(SeleniumTest):
             assert self.is_striked_through(secure_upload_li) == True
             secure_publish_li = self.wait_for_element(By.ID, 'setup-step-secure-publish')
             assert self.is_striked_through(secure_publish_li) == False
-            self.check_progress_bar(90)
+            secure_auto_create_namespace_li = self.wait_for_element(By.ID, 'setup-step-secure-auto-create-namespace')
+            assert self.is_striked_through(secure_auto_create_namespace_li) == False
+            secure_auto_create_module_provider_li = self.wait_for_element(By.ID, 'setup-step-secure-auto-create-module-provider')
+            assert self.is_striked_through(secure_auto_create_module_provider_li) == False
+            self.check_progress_bar(85)
 
         # Set publish API keys
         with self.update_mock(self._config_publish_api_keys_mock, 'new', ['some-api-publish-key']):
@@ -256,7 +306,41 @@ class TestInitialSetup(SeleniumTest):
             assert self.is_striked_through(secure_upload_li) == False
             secure_publish_li = self.wait_for_element(By.ID, 'setup-step-secure-publish')
             assert self.is_striked_through(secure_publish_li) == True
-            self.check_progress_bar(90)
+            secure_auto_create_namespace_li = self.wait_for_element(By.ID, 'setup-step-secure-auto-create-namespace')
+            assert self.is_striked_through(secure_auto_create_namespace_li) == False
+            secure_auto_create_module_provider_li = self.wait_for_element(By.ID, 'setup-step-secure-auto-create-module-provider')
+            assert self.is_striked_through(secure_auto_create_module_provider_li) == False
+            self.check_progress_bar(85)
+
+        # Disable auto create namespace
+        with self.update_mock(self._config_auto_create_namespace_mock, 'new', False):
+            # Reload page and ensure secret is striked through
+            self.selenium_instance.get(self.get_url('/initial-setup'))
+
+            secure_upload_li = self.wait_for_element(By.ID, 'setup-step-secure-upload')
+            assert self.is_striked_through(secure_upload_li) == False
+            secure_publish_li = self.wait_for_element(By.ID, 'setup-step-secure-publish')
+            assert self.is_striked_through(secure_publish_li) == False
+            secure_auto_create_namespace_li = self.wait_for_element(By.ID, 'setup-step-secure-auto-create-namespace')
+            assert self.is_striked_through(secure_auto_create_namespace_li) == True
+            secure_auto_create_module_provider_li = self.wait_for_element(By.ID, 'setup-step-secure-auto-create-module-provider')
+            assert self.is_striked_through(secure_auto_create_module_provider_li) == False
+            self.check_progress_bar(85)
+
+        # Disable auto create module provider
+        with self.update_mock(self._config_auto_create_module_provider_mock, 'new', False):
+            # Reload page and ensure secret is striked through
+            self.selenium_instance.get(self.get_url('/initial-setup'))
+
+            secure_upload_li = self.wait_for_element(By.ID, 'setup-step-secure-upload')
+            assert self.is_striked_through(secure_upload_li) == False
+            secure_publish_li = self.wait_for_element(By.ID, 'setup-step-secure-publish')
+            assert self.is_striked_through(secure_publish_li) == False
+            secure_auto_create_namespace_li = self.wait_for_element(By.ID, 'setup-step-secure-auto-create-namespace')
+            assert self.is_striked_through(secure_auto_create_namespace_li) == False
+            secure_auto_create_module_provider_li = self.wait_for_element(By.ID, 'setup-step-secure-auto-create-module-provider')
+            assert self.is_striked_through(secure_auto_create_module_provider_li) == True
+            self.check_progress_bar(85)
 
     def _test_ssl_step(self):
         """Test SSL step."""
@@ -277,7 +361,7 @@ class TestInitialSetup(SeleniumTest):
         self.check_only_card_is_displayed('complete')
         self.check_progress_bar(120)
 
-    def test_setup_page(self):
+    def test_setup_page(self, mock_create_audit_event):
         """Test functionality of setup page."""
         # Load homepage
         self.selenium_instance.get(self.get_url('/'))
@@ -292,43 +376,62 @@ class TestInitialSetup(SeleniumTest):
         self._test_auth_vars_step()
 
         # STEP 2 - Login
-        with self.update_mock(self._config_admin_authentication_key_mock, 'new', 'admin-setup-password'), \
-                self.update_mock(self._config_secret_key_mock, 'new', 'abcdefabcdef'):
+        with self.update_multiple_mocks((self._config_admin_authentication_key_mock, 'new', 'admin-setup-password'), \
+                (self._config_secret_key_mock, 'new', 'abcdefabcdef')):
             self._test_login_step()
 
-            # Step 3 - Create a module
+            # Step 3 - Create a namespace
+            self._test_create_namespace_step()
+
+            # Get namespace object
+            namespace = Namespace.get('unittestnamespace')
+
+            # Step 4 - Create a module
             self._test_create_module_step()
 
-            # Create module provider
-            namespace = Namespace(name='unittestnamespace')
+            # Get module provider object
             module = Module(namespace=namespace, name='setupmodulename')
-            module_provider = ModuleProvider.get(module=module, name='setupprovider', create=True)
+            module_provider = ModuleProvider.get(module=module, name='setupprovider')
 
-            # Step 4a. - Index module version from git
+            # Step 5a. - Index module version from git
             self._test_index_version_git_step(module_provider)
 
-            # Step 4b. - Index module version from source
-            self._test_index_version_upload_step(module_provider)
+            # Step 5b. - Index module version from source
+            ## Test with various combinations of API keys enabled
+            for upload_api_keys in [[], ['a-key']]:
+                for publish_api_keys in [[], ['a-key']]:
+                    with self.update_multiple_mocks(
+                            (self._config_upload_api_keys_mock, 'new', upload_api_keys), \
+                            (self._config_publish_api_keys_mock, 'new', publish_api_keys)):
+                        self._test_index_version_upload_step(
+                            module_provider,
+                            upload_api_key_enabled=bool(upload_api_keys),
+                            publish_api_key_enabled=bool(publish_api_keys))
 
-            # Create module version to move to next step
-            module_version = ModuleVersion(module_provider=module_provider, version='1.0.0')
-            module_version.prepare_module()
+            with mock_create_audit_event:
+                # Create module version to move to next step
+                module_version = ModuleVersion(module_provider=module_provider, version='1.0.0')
+                module_version.prepare_module()
 
             # Check upload module version steps with unpublished version
             self._test_publish_module_version_upload_step(module_provider)
 
-            # Step 4a. (repeat with unpublished version)
+            # Step 5a. (repeat with unpublished version)
             self._test_publish_module_version_git_step(module_provider)
 
-            # Publish module version to get to step 5
-            module_version.publish()
+            with mock_create_audit_event:
+                # Publish module version to get to step 5
+                module_version.publish()
 
-            # Step 5 - Secure instance
+            # Step 6 - Secure instance
             self._test_secure_instance_step()
 
-            # STEP 6 - HTTPS
-            with self.update_mock(self._config_upload_api_keys_mock, 'new', ['some-api-upload-key']), \
-                    self.update_mock(self._config_publish_api_keys_mock, 'new', ['some-api-publish-key']):
+            # STEP 7 - HTTPS
+            with self.update_multiple_mocks(
+                    (self._config_upload_api_keys_mock, 'new', ['some-api-upload-key']), \
+                    (self._config_publish_api_keys_mock, 'new', ['some-api-publish-key']),
+                    (self._config_auto_create_namespace_mock, 'new', False),
+                    (self._config_auto_create_module_provider_mock, 'new', False),):
                 self._test_ssl_step()
 
                 # Step 7 - Success

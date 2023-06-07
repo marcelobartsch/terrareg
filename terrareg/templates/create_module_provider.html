@@ -24,15 +24,17 @@
             }),
             contentType: 'application/json'
         }).done((res) => {
-            window.location.href = `/modules/${res.id}`
-        }).fail((res) => {
-            if (res.status == 401) {
-                $('#create-error').html('You must be logged in to perform this action.<br />If you were previously logged in, please re-authentication and try again.');
-            } else if (res.responseJSON && res.responseJSON.message) {
-                $('#create-error').html(res.responseJSON.message);
+            // Obtain get parameters from URL
+            const urlParams = getUrlParams();
+            // If parameter from initial setup page is present,
+            // redirect user back to initial setup
+            if (urlParams.initial_setup) {
+                window.location.href = '/initial-setup';
             } else {
-                $('#create-error').html('An unexpected error occurred');
+                window.location.href = `/modules/${res.id}`;
             }
+        }).fail((res) => {
+            $('#create-error').html(failedResponseToErrorString(res));
             $('#create-error').css('display', 'block');
             $(window).scrollTop($('#create-error').offset().top);
         });
@@ -58,6 +60,17 @@
             }
         });
     }
+
+    // Obtain list of module providers
+    isLoggedIn().then((auth) => {
+        $.get('/v1/terrareg/namespaces').then((data) => {
+            data.forEach((namespace) => {
+                if (auth.site_admin || auth.namespace_permissions[namespace.name] == 'FULL') {
+                    $('#create-module-namespace').append($(`<option value="${namespace.name}">${namespace.display_name || namespace.name}</option>`))
+                }
+            });
+        });
+    });
 </script>
 {% endblock %}
 
@@ -78,8 +91,9 @@
             <form id="create-module-form" onsubmit="event.preventDefault(); createModuleProvider();">
                 <div class="field">
                     <label class="label">Namespace</label>
-                    <div class="control">
-                    <input required id="create-module-namespace" class="input" type="text" placeholder="my-team">
+                    <div class="control select">
+                        <select id="create-module-namespace">
+                        </select>
                     </div>
                 </div>
 
@@ -132,10 +146,10 @@
                 <div id="create-module-clone-url-template-container" class="field create-module-custom-field-container">
                     <label class="label">Custom Repository Clone URL</label>
                     <div class="control">
-                        <input placeholder="ssh://git@github.com:my-team/my-module-provider.git" class="input" type="text" id="create-module-clone-url-template">
+                        <input placeholder="ssh://git@github.com/my-team/my-module-provider.git" class="input" type="text" id="create-module-clone-url-template">
                     </div>
                     This URL must be valid for cloning the repository.<br />
-                    It may include templated values, such as: <code>{namespace}</code>, <code>{module}</code>, <code>{provider}</code>>.<br />
+                    It may include templated values, such as: <code>{namespace}</code>, <code>{module}</code>, <code>{provider}</code>.<br />
                     E.g. <code>ssh://git@github.com/{namespace}/{module}-{provider}.git</code><br />
                     NOTE: Setting this field will override the repository provider configuration.
                 </div>
@@ -146,7 +160,7 @@
                     </div>
                     This URL must be valid for browsing the source code of the repository at a particular tag/path.<br />
                     It may include templated values, such as: <code>{namespace}</code>, <code>{module}</code>, <code>{provider}</code>.<br />
-                    It must include the following template values: <code>code>{tag}</code> and {path}</code><br />
+                    It must include the following template values: <code>{tag}</code> and <code>{path}</code><br />
                     E.g. <code>https://github.com/{namespace}/{module}-{provider}/tree/{tag}/{path}</code><br />
                     NOTE: Setting this field will override the repository provider configuration.
                 </div>
@@ -155,7 +169,7 @@
                 <div class="field">
                     <label class="label">Git tag format</label>
                     <div class="control">
-                        <input required placeholder="v{version}" class="input" type="text" id="create-module-git-tag-format">
+                        <input required placeholder="v{version}" class="input" type="text" id="create-module-git-tag-format" value="v{version}">
                     </div>
                     This value will be converted to the expected git tag for a module version.<br />
                     The <code>{version}</code> template will be replaced by the actual module version.<br />

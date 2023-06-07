@@ -16,10 +16,11 @@ class TestModuleSearch(SeleniumTest):
     @classmethod
     def setup_class(cls):
         """Setup required mocks."""
+        cls._config_trusted_namespaces_mock = mock.patch('terrareg.config.Config.TRUSTED_NAMESPACES', ['modulesearch-trusted', 'relevancysearch'])
         cls.register_patch(mock.patch('terrareg.config.Config.CONTRIBUTED_NAMESPACE_LABEL', 'unittest contributed module'))
         cls.register_patch(mock.patch('terrareg.config.Config.TRUSTED_NAMESPACE_LABEL', 'unittest trusted namespace'))
         cls.register_patch(mock.patch('terrareg.config.Config.VERIFIED_MODULE_LABEL', 'unittest verified label'))
-        cls.register_patch(mock.patch('terrareg.config.Config.TRUSTED_NAMESPACES', ['modulesearch-trusted']))
+        cls.register_patch(cls._config_trusted_namespaces_mock)
         super(TestModuleSearch, cls).setup_class()
 
     def test_search_from_homepage(self):
@@ -49,21 +50,21 @@ class TestModuleSearch(SeleniumTest):
 
         expected_card_headings = [
             'modulesearch-trusted / mixedsearch-trusted-result',
+            'modulesearch-trusted / mixedsearch-trusted-second-result',
             'modulesearch-trusted / mixedsearch-trusted-result-multiversion',
             'modulesearch-trusted / mixedsearch-trusted-result-verified',
-            'modulesearch-trusted / mixedsearch-trusted-second-result'
         ]
         expected_card_links = [
-            '/modules/modulesearch-trusted/mixedsearch-trusted-result/aws/1.0.0',
-            '/modules/modulesearch-trusted/mixedsearch-trusted-result-multiversion/null/2.0.0',
-            '/modules/modulesearch-trusted/mixedsearch-trusted-result-verified/gcp/2.0.0',
-            '/modules/modulesearch-trusted/mixedsearch-trusted-second-result/datadog/5.2.1'
+            '/modules/modulesearch-trusted/mixedsearch-trusted-result/aws',
+            '/modules/modulesearch-trusted/mixedsearch-trusted-second-result/datadog',
+            '/modules/modulesearch-trusted/mixedsearch-trusted-result-multiversion/null',
+            '/modules/modulesearch-trusted/mixedsearch-trusted-result-verified/gcp',
         ]
         expected_card_provider_text = [
             'Provider: aws',
+            'Provider: datadog',
             'Provider: null',
             'Provider: gcp',
-            'Provider: datadog'
         ]
         for card in result_cards:
             heading = card.find_element(By.CLASS_NAME, 'module-card-title')
@@ -147,7 +148,7 @@ class TestModuleSearch(SeleniumTest):
                 By.ID, 'results').find_elements(
                     By.CLASS_NAME, 'card')[0].find_element(
                         By.CLASS_NAME, 'module-card-title').text,
-            'modulesearch-trusted / mixedsearch-trusted-result-multiversion'
+            'modulesearch-trusted / mixedsearch-trusted-second-result'
         )
 
         # Ensure that all cards have been updated
@@ -167,7 +168,7 @@ class TestModuleSearch(SeleniumTest):
                 By.ID, 'results').find_elements(
                     By.CLASS_NAME, 'card')[0].find_element(
                         By.CLASS_NAME, 'module-card-title').text,
-            'modulesearch / contributedmodule-differentprovider'
+            'modulesearch / contributedmodule-oneversion'
         )
 
         # Ensure that all of the original cards are displayed
@@ -208,3 +209,106 @@ class TestModuleSearch(SeleniumTest):
         # Check total count
         self.assert_equals(lambda: self.selenium_instance.find_element(By.ID, 'result-count').text, 'Showing results 0 - 0 of 0')
 
+    def test_result_relevancy_ordering(self):
+        """Test results are displayed in relevancy order"""
+        self.selenium_instance.get(self.get_url('/modules/search?q=namematch'))
+
+        self.assert_equals(lambda: len(self.selenium_instance.find_element(By.ID, 'results').find_elements(By.CLASS_NAME, 'card')), 8)
+        result_cards = self.selenium_instance.find_element(By.ID, 'results').find_elements(By.CLASS_NAME, 'card')
+
+        expected_card_headings = [
+            ('relevancysearch / namematch', 'namematch'),
+            ('relevancysearch / namematch', 'partialprovidernamematch'),
+            ('relevancysearch / partialmodulenamematch', 'namematch'),
+            ('relevancysearch / descriptionmatch', 'testprovider'),
+            ('relevancysearch / ownermatch', 'testprovider'),
+            ('relevancysearch / partialmodulenamematch', 'partialprovidernamematch'),
+            ('relevancysearch / partialdescriptionmatch', 'testprovider'),
+            ('relevancysearch / partialownermatch', 'testprovider')
+        ]
+
+        for expected_heading, expected_provider in expected_card_headings:
+            card = result_cards.pop(0)
+            heading = card.find_element(By.CLASS_NAME, 'module-card-title')
+
+            assert heading.text == expected_heading
+            assert card.find_element(By.CLASS_NAME, 'module-provider-card-provider-text').text == f"Provider: {expected_provider}"
+
+    @pytest.mark.parametrize('input_terraform_version, expected_compatibility_text', [
+        ('2.5.0', [
+            'Compatible',
+            'Compatible',
+            'Implicitly compatible',
+            'No version constraint defined',
+            # Final item has no entry, due to invalid version constraint
+            None,
+        ]),
+
+        ('0.5.0', [
+            'Incompatible',
+            'Incompatible',
+            'Incompatible',
+            'No version constraint defined',
+            # Final item has no entry, due to invalid version constraint
+            None,
+        ])
+    ])
+    def test_terraform_version_compatibility(self, input_terraform_version, expected_compatibility_text):
+        """Test terraform compatiblity input and display"""
+        # Delete cookies/local storage to remove pre-set terraform version
+        self.selenium_instance.delete_all_cookies()
+
+        with self.update_mock(self._config_trusted_namespaces_mock, 'new', ['version-constraint-test']):
+            # Search for modules
+            self.selenium_instance.get(self.get_url('/modules/search?q=version-constraint-test'))
+
+            self.assert_equals(lambda: len(self.selenium_instance.find_element(By.ID, 'results').find_elements(By.CLASS_NAME, 'card')), 5)
+
+            # Ensure non of the result cards contain version constraints
+            assert self.selenium_instance.find_element(By.ID, 'results').find_elements(By.CLASS_NAME, 'card-terraform-version-compatibility') == []
+
+            # Inspect and enter Terraform version into target Terraform input and update
+            terraform_input = self.selenium_instance.find_element(By.ID, 'search-terraform-version')
+            assert terraform_input.get_attribute("value") == ""
+            terraform_input.send_keys(input_terraform_version)
+
+            # Click update
+            self.selenium_instance.find_element(By.ID, 'search-options-update-button').click()
+
+            result_cards = self.selenium_instance.find_element(By.ID, 'results').find_elements(By.CLASS_NAME, 'card')
+            def get_result_card_compatibility_text(result_card):
+                try:
+                    return result_card.find_element(By.CLASS_NAME, 'card-terraform-version-compatibility').text
+                except:
+                    pass
+                return None
+            actual_result_card_compatibility_text = [
+                get_result_card_compatibility_text(result_card)
+                for result_card in result_cards
+            ]
+            assert actual_result_card_compatibility_text == expected_compatibility_text
+
+    def test_terraform_version_compatibility_retains_state(self):
+        """Test terraform compatiblity input is retained between page loads"""
+        self.selenium_instance.delete_all_cookies()
+
+        # Search for modules
+        self.selenium_instance.get(self.get_url('/modules/search?q='))
+
+        # Inspect and enter Terraform version into target Terraform input and update
+        terraform_input = self.selenium_instance.find_element(By.ID, 'search-terraform-version')
+        assert terraform_input.get_attribute("value") == ""
+        terraform_input.send_keys("5.2.6-unittest")
+
+        # Click update
+        self.selenium_instance.find_element(By.ID, 'search-options-update-button').click()
+
+        # Reload page
+        self.selenium_instance.get(self.get_url('/modules/search?q='))
+        # Check terraform version is still present
+        assert self.selenium_instance.find_element(By.ID, 'search-terraform-version').get_attribute("value") == "5.2.6-unittest"
+
+        # Open user preferences and check terraform version
+        self.selenium_instance.find_element(By.ID, 'navbar-user-preferences-link').click()
+        # Check user input for terraform versino constraint
+        assert self.selenium_instance.find_element(By.ID, 'user-preferences-terraform-compatibility-version').get_attribute("value") == "5.2.6-unittest"

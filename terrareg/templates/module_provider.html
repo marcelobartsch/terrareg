@@ -6,7 +6,11 @@
 <script src="/static/js/terrareg/module_provider_page.js"></script>
 <link rel="stylesheet" href="/static/css/module_provider_page.css" />
 
+<link href="/static/css/prism/prism-hcl-1.29.0.css" rel="stylesheet" />
+<script src="/static/js/prism/prism-hcl-1.29.0.js"></script>
+
 <script>
+    window.Prism = window.Prism || {};
     $(document).ready(function () {
         renderPage();
     });
@@ -46,38 +50,39 @@
                     </select>
                 </div>
             </section>
-            <p id="version-text" class="subtitle"></p>
+            <p id="version-text" class="subtitle default-hidden"></p>
             <div id="module-labels">
-                <span id="security-issues" class="tag is-danger is-light result-card-label result-card-label-security-issues default-hidden">
-                    <span class="panel-icon">
-                        <i class="fa fa-bug" aria-hidden="true"></i>
+                <span id="security-issues" class="tags has-addons result-card-label result-card-label-security-issues default-hidden">
+                    <span id="result-card-label-security-issues-icon" class="tag result-card-label-security-issue-tag is-light">
+                        <span class="panel-icon">
+                            <i class="fa fa-bug" aria-hidden="true"></i>
+                        </span>
+                        Security Issues
                     </span>
-                    <p id="security-issues-text">${module.security_failures} Security issues</p>
+                    <span id="result-card-label-security-issues-critical-count" alt="Critical severity security issues" class="tag result-card-label-security-issue-tag result-card-label-security-issue-result-tag is-light is-danger default-hidden"></span>
+                    <span id="result-card-label-security-issues-high-count" alt="High severity security issues" class="tag result-card-label-security-issue-tag result-card-label-security-issue-result-tag is-light is-warning default-hidden"></span>
+                    <span id="result-card-label-security-issues-low-count" alt="Medium/Low severity security issues" class="tag result-card-label-security-issue-tag result-card-label-security-issue-result-tag is-light is-info default-hidden"></span>
                 </span>
 
-                <span id="yearly-cost-label" class="tag is-warning is-light result-card-label result-card-label-security-issues default-hidden">
-                    <span class="panel-icon">
-                        <i class="fa fa-dollar" aria-hidden="true"></i>
-                    </span>
+                <span id="yearly-cost-label" class="tag is-warning is-light result-card-label result-card-label-cost default-hidden">
                     <p id="label-text"></p>
                 </span>
             </div>
 
             <!-- Basic details about module -->
+            <p id="current-submodule" class="subtitle default-hidden"></p>
             <p id="module-title" class="title">
             </p>
             <p id="module-provider" class="subtitle">
             </p>
 
-            <p id="current-submodule" class="subtitle default-hidden"></p>
-
             <p id="unpublished-warning" class="subtitle default-hidden">
                 <b>WARNING:</b> This version of the module is not published.<br />
-                It cannot be used in terraform until it is published.
+                It cannot be used in Terraform until it is published.
             </p>
             <p id="beta-warning" class="subtitle default-hidden">
                 <b>WARNING:</b> This is a beta module version.<br />
-                To use this version in terraform, it must be specifically pinned.<br />
+                To use this version in Terraform, it must be specifically pinned.<br />
                 For an example, see the 'Usage' section.
             </p>
             <p id="non-latest-version-warning" class="subtitle default-hidden">
@@ -98,6 +103,9 @@
                 <span class="tag is-warning result-card-label result-card-label-security-issues">
                     <b>$<span id="yearly-cost-text"></span></b>
                 </span>
+            </div>
+
+            <div id="custom-links">
             </div>
 
             <br />
@@ -122,6 +130,13 @@
                     </select>
                 </div>
             </section>
+
+            <p id="outdated-extraction-warning" class="default-hidden">
+                <br />
+                This module version was extracted using a previous version of Terrareg meaning that some data maybe not be available.
+                <br />
+                Consider re-indexing this module version to enable all features.
+            </p>
 
             <br />
             <br />
@@ -164,15 +179,25 @@
             <div id="usage-example-container" class="box default-hidden">
                 <h5 class="title is-5">Usage</h5>
                 <div class="content">
+                    <p class="default-hidden" id="supported-terraform-compatible">
+                        Terraform <span id="supported-terraform-compatible-target-version"></span> compatibility:
+                        <span id="supported-terraform-compatible-tag" class="tag is-medium is-light">
+                        </span>
+                    </p>
+
+                    <p class="default-hidden" id="supported-terraform-versions">
+                        Supported Terraform versions: <code id="supported-terraform-versions-data"></code>
+                    </p>
+
                     To use this module:
                     <ol>
-                        <li>Add the following example to your terraform,</li>
-                        <li>Ensure the "<span id="usage-example-analytics-token"></span>" placeholder must be replaced with your '<span id="usage-example-analytics-token-phrase"></span>',</li>
-                        <li>Add the required inputs - use the '<a onclick="selectModuleTab('usage-builder')">Usage Builder</a>' tab for help and 'Inputs' tab for a full list.</li>
+                        <li>Add the following example to your Terraform,</li>
+                        <li id="usage-example-analytics-token-instruction">Ensure the "<span id="usage-example-analytics-token"></span>" placeholder must be replaced with your '<span id="usage-example-analytics-token-phrase"></span>',</li>
+                        <li>Add the required inputs - use the <span id="example-link-usage-builder" class="module-tab-link default-hidden">'<a onclick="selectModuleTab('usage-builder')">Usage Builder</a>' tab for help and </span>'Inputs' tab for a full list.</li>
                     </ol>
                 </div>
 
-                <pre id="usage-example-terraform"></pre>
+                <pre><code id="usage-example-terraform" class="language-hcl"></code></pre>
             </div>
         </div>
     </div>
@@ -188,7 +213,15 @@
         <li id="module-tab-link-resources" class="module-tab-link default-hidden">
             <a onclick="selectModuleTab('resources')">Resources</a>
         </li>
+        <li id="module-tab-link-modules" class="module-tab-link default-hidden"><a onclick="selectModuleTab('modules')">Modules</a></li>
 
+
+        <li id="module-tab-link-security-issues" class="module-tab-link default-hidden">
+            <a onclick="selectModuleTab('security-issues')">
+                Security Issues
+                <span class="tag is-warning is-light terrareg-exclusive default-hidden">Terrareg Exclusive</span>
+            </a>
+        </li>
         <li id="module-tab-link-analytics" class="module-tab-link default-hidden">
             <a onclick="selectModuleTab('analytics')">
                 Analytics
@@ -198,7 +231,7 @@
         <li id="module-tab-link-usage-builder" class="module-tab-link default-hidden">
             <a onclick="selectModuleTab('usage-builder')">
                 Usage Builder
-                <span class="tag is-warning is-light terrareg-exclusive">Terrareg Exclusive</span>
+                <span class="tag is-warning is-light terrareg-exclusive default-hidden">Terrareg Exclusive</span>
             </a>
         </li>
         <li id="module-tab-link-integrations" class="module-tab-link default-hidden">
@@ -234,7 +267,7 @@
                 </div>
 
                 <div class="column is-four-fifths">
-                    <pre><code id="example-file-content" class="language-hcl" data-lang="html"></code></pre>
+                    <pre><code id="example-file-content" class="language-hcl" data-lang="hcl"></code></pre>
                 </div>
             </div>
         </div>
@@ -287,6 +320,9 @@
 
         <!-- Resources tab -->
         <div id="module-tab-resources" class="module-tabs default-hidden">
+
+            <a id="resourceDependencyGraphLink" href="#">View a resource dependency graph</a>
+
             <table class="table module-provider-tab-content-table">
                 <thead>
                     <tr>
@@ -302,6 +338,49 @@
                 <tbody>
                 </tbody>
             </table>
+        </div>
+
+        <!-- Modules tab -->
+        <div id="module-tab-modules" class="module-tabs default-hidden">
+
+            <table class="table module-modules-tab-content-table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Source</th>
+                        <th>Version</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Security Issues tab -->
+        <div id="module-tab-security-issues" class="module-tabs default-hidden">
+            <div class="table-container">
+                <table id="security-issues-table" class="table display compact nowrap responsive" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>Severity</th>
+                            <th>File</th>
+                            <th>Description</th>
+                            <th>ID</th>
+                            <th>Provider</th>
+                            <th>Service</th>
+                            <th>Resource</th>
+                            <th>Starting Line</th>
+                            <th>Ending Line</th>
+                            <th>Impact</th>
+                            <th>Resolution</th>
+                            <th>Resources</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tfsecResultsTable">
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Analytics tab -->
@@ -322,18 +401,22 @@
 
         <!-- Usage Builder tab -->
         <div id="module-tab-usage-builder" class="module-tabs default-hidden">
-            <span>Provide values to the following inputs to generate terraform required to use the module.</span>
-            <table id="usage-builder-table" class="table module-provider-tab-content-table">
-                <thead>
-                    <tr>
-                        <th>Variable</th>
-                        <th>Description</th>
-                        <th>Value</th>
-                    </tr>
-                </thead>
-                <tbody id="usageBuilderTable">
-                </tbody>
-            </table>
+            <div class="notification has-text-centered">Provide values to the following inputs to generate Terraform required to use the module.</div><br />
+            <form name="frm-example" id="frm-example">
+                <table id="usage-builder-table" class="table is-flex-wrap-wrap module-provider-tab-content-table" style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th>Variable</th>
+                            <th>Required?</th>
+                            <th>Description</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usageBuilderTable">
+                    </tbody>
+                </table>
+            </form>
+            <br/><br/>
             <pre id="usageBuilderOutput"></pre>
         </div>
 

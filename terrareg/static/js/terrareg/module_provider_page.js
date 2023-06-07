@@ -11,11 +11,15 @@ class TabFactory {
         this._tabsLookup[tab.name] = tab;
         this._tabs.push(tab);
     }
-    renderTabs() {
-        this._tabs.forEach((tab) => {
+    async renderTabs() {
+        for (const tab of this._tabs) {
             tab.render();
-        });
+        }
+        for (const tab of this._tabs) {
+            await tab._renderPromise;
+        }
     }
+
     async setDefaultTab() {
 
         // Check if tab is defined in page URL anchor and if it's
@@ -34,6 +38,23 @@ class TabFactory {
             }
         }
 
+        if (windowHashValue.indexOf('terrareg-anchor-') === 0) {
+            // Check for any elements that have a child element that have ID/name of the anchor
+            for (const tab of this._tabs) {
+                let elements = $.find(`#module-tab-${tab.name} #${windowHashValue}, #module-tab-${tab.name} [name="${windowHashValue}"]`);
+                if (elements.length) {
+                    let element = elements[0];
+
+                    // Select tab
+                    selectModuleTab(tab.name, false);
+
+                    // Scroll to element
+                    element.scrollIntoView();
+                    return;
+                }
+            }
+        }
+
         // Iterate through all tabs and select first valid tab
         for (const tab of this._tabs) {
             let isValid = await tab.isValid();
@@ -49,7 +70,7 @@ class BaseTab {
     constructor() {
         this._renderPromise = undefined;
     }
-    render() {}
+    render() {  }
     async isValid() {
         let result = await this._renderPromise;
         return result;
@@ -61,7 +82,7 @@ class ModuleDetailsTab extends BaseTab {
         super();
         this._moduleDetails = moduleDetails;
     }
-    render() {}
+    render() { }
 }
 
 
@@ -85,29 +106,96 @@ class ReadmeTab extends BaseTab {
                     resolve(false);
                     return;
                 }
-            
+
                 let readmeContentDiv = $("#module-tab-readme");
-            
+
                 // Populate README conrtent
                 readmeContentDiv.append(readmeContent);
-            
+
                 // Add 'table' class to all tables in README
                 readmeContentDiv.find("table").addClass("table");
-            
+
                 // Replace size of headers
                 readmeContentDiv.find("h1").addClass("subtitle").addClass("is-3");
                 readmeContentDiv.find("h2").addClass("subtitle").addClass("is-4");
                 readmeContentDiv.find("h3").addClass("subtitle").addClass("is-5");
                 readmeContentDiv.find("h4").addClass("subtitle").addClass("is-6");
-            
+
+                for (let codeDiv of readmeContentDiv.find("code")) {
+                    // If code is within pre block, perform syntax highlighting.
+                    if (codeDiv.parentElement.nodeName.toLowerCase() == "pre") {
+                        window.Prism.highlightElement(codeDiv);
+                    } else {
+                        // Otherwise, removall all "language" classes
+                        for (let className of codeDiv.className.split(/\s+/)) {
+                            if (className.indexOf('language-') !== -1) {
+                                $(codeDiv).removeClass(className)
+                            }
+                        }
+                    }
+                }
+
                 // Show README tab button
                 $("#module-tab-link-readme").removeClass('default-hidden');
-            
+
                 resolve(true);
             });
         });
     }
 }
+
+
+class AdditionalTab extends BaseTab {
+    constructor(tabName, fileUrl) {
+        super();
+        this._tabName = tabName;
+        this._fileUrl = fileUrl;
+        this._name = 'custom-' + this._tabName.replace(/[^a-zA-Z]/i, '-');
+    }
+    get name() {
+        return this._name;
+    }
+    render() {
+        this._renderPromise = new Promise((resolve) => {
+            if (!this._fileUrl) {
+                resolve(false);
+                return;
+            }
+            $.get(this._fileUrl, (fileContent) => {
+                if (!fileContent) {
+                    resolve(false);
+                    return;
+                }
+
+                let tab = $(`<div id="module-tab-${this.name}" class="module-tabs content default-hidden"></div>`);
+
+                // Populate file conrtent
+                tab.append(fileContent);
+
+                // Add 'table' class to all tables in README
+                tab.find("table").addClass("table");
+
+                // Replace size of headers
+                tab.find("h1").addClass("subtitle").addClass("is-3");
+                tab.find("h2").addClass("subtitle").addClass("is-4");
+                tab.find("h3").addClass("subtitle").addClass("is-5");
+                tab.find("h4").addClass("subtitle").addClass("is-6");
+
+                // Insert tab link content
+                let insertAfterContent = $('#module-tab-resources')[0];
+                tab.insertAfter(insertAfterContent);
+
+                // Insert tab link
+                let tabLink = $(`<li id="module-tab-link-${this.name}" class="module-tab-link"><a onclick="selectModuleTab('${this.name}')">${this._tabName}</a></li>`);
+                let insertAfterLink = $('#module-tab-link-resources');
+                tabLink.insertAfter(insertAfterLink);
+
+                resolve(true);
+            });
+        });
+    }
+}
+
 
 class AnalyticsTab extends ModuleDetailsTab {
     get name() {
@@ -115,6 +203,14 @@ class AnalyticsTab extends ModuleDetailsTab {
     }
     async render() {
         this._renderPromise = new Promise(async (resolve) => {
+
+            // Check if analytics are disabled
+            let config = await getConfig();
+            if (config.DISABLE_ANALYTICS) {
+                resolve(false);
+                return;
+            }
+
             $.get(`/v1/terrareg/analytics/${this._moduleDetails.module_provider_id}/token_versions`, (data, status) => {
                 Object.keys(data).forEach((token) => {
                     $("#analyticsVersionByTokenTable").append(`
@@ -156,7 +252,7 @@ class ExampleFilesTab extends ModuleDetailsTab {
     async render() {
         this._renderPromise = new Promise(async (resolve) => {
             $.get(`/v1/terrareg/modules/${this._moduleDetails.id}/examples/filelist/${this._exampleDetails.path}`, (data) => {
-                if (! data.length) {
+                if (!data.length) {
                     resolve(false);
                     return;
                 }
@@ -194,7 +290,7 @@ class InputsTab extends ModuleDetailsTab {
         return 'inputs';
     }
     async render() {
-            this._renderPromise = new Promise(async (resolve) => {
+        this._renderPromise = new Promise(async (resolve) => {
             let inputTab = $("#module-tab-inputs");
             let inputTabTbody = inputTab.find("tbody");
             this._moduleDetails.inputs.forEach((input) => {
@@ -255,6 +351,39 @@ class OutputsTab extends ModuleDetailsTab {
     }
 }
 
+class ModulesTab extends ModuleDetailsTab {
+    get name() {
+        return 'modules';
+    }
+    async render() {
+        this._renderPromise = new Promise(async (resolve) => {
+            let modulesTab = $("#module-tab-modules");
+            let modulesTabTbody = modulesTab.find("tbody");
+            this._moduleDetails.modules.forEach((submodule) => {
+                let moduleRow = $("<tr></tr>");
+
+                let nameTd = $("<td></td>");
+                nameTd.text(submodule.name);
+                moduleRow.append(nameTd);
+
+                let sourceTd = $("<td></td>");
+                sourceTd.text(submodule.source);
+                moduleRow.append(sourceTd);
+
+                let versionTd = $("<td></td>");
+                versionTd.text(submodule.version);
+                moduleRow.append(versionTd);
+
+                modulesTabTbody.append(moduleRow);
+            });
+
+            // Show tab link
+            $('#module-tab-link-modules').removeClass('default-hidden');
+            resolve(true);
+        });
+    }
+}
+
 class ProvidersTab extends ModuleDetailsTab {
     get name() {
         return 'providers';
@@ -292,12 +421,142 @@ class ProvidersTab extends ModuleDetailsTab {
     }
 }
 
+class SecurityIssuesTab extends ModuleDetailsTab {
+    get name() {
+        return 'security-issues';
+    }
+    async render() {
+        this._renderPromise = new Promise(async (resolve) => {
+            if (this._moduleDetails.security_results) {
+                let tfsecTab = $("#module-tab-security-issues");
+                let tfsecTabTbody = tfsecTab.find("tbody");
+                this._moduleDetails.security_results.sort((a, b) => {
+                    return a.location.filename > b.location.filename
+                }).forEach((tfsec) => {
+                    let tfsecRow = $("<tr></tr>");
+
+                    let blankTd = $('<td class="is-vcentered"></td>');
+                    tfsecRow.append(blankTd);
+
+                    let color = 'darkgray';
+                    if (tfsec.severity == "CRITICAL") {
+                        color = 'red';
+                    } else if (tfsec.severity == "HIGH") {
+                        color = 'orangered';
+                    } else if (tfsec.severity == "MEDIUM") {
+                        color = 'orange';
+                    }
+                    let severityTd = `<td class="is-vcentered"><span class="tag is-primary is-light" style="background-color: ${color}; color: white">${tfsec.severity}</span></td>`;
+                    tfsecRow.append(severityTd);
+
+                    let fileTd = $('<td class="is-vcentered"></td>');
+                    if (tfsec.location && tfsec.location.filename) {
+                        fileTd.text(tfsec.location.filename);
+                    }
+                    tfsecRow.append(fileTd);
+
+                    let descriptionTd = $('<td class="is-vcentered"></td>');
+                    descriptionTd.text(tfsec.rule_description);
+                    tfsecRow.append(descriptionTd);
+
+                    let ruleidTd = $('<td class="is-vcentered"></td>');
+                    let tfsec_link = '#';
+                    if (tfsec.links && tfsec.links[0]) {
+                        tfsec_link = tfsec.links[0];
+                    }
+                    ruleidTd.html(`<a href="${tfsec_link}" target="_blank" rel="noopener noreferrer">${tfsec.rule_id}</a>`);
+                    tfsecRow.append(ruleidTd);
+
+                    let providerTd = $('<td class="is-vcentered"></td>');
+                    providerTd.text(tfsec.rule_provider);
+                    tfsecRow.append(providerTd);
+
+                    let serviceTd = $('<td class="is-vcentered"></td>');
+                    serviceTd.text(tfsec.rule_service);
+                    tfsecRow.append(serviceTd);
+
+                    let resourceTd = $('<td class="is-vcentered"></td>');
+                    resourceTd.text(tfsec.resource);
+                    tfsecRow.append(resourceTd);
+
+                    let startLineTd = $('<td class="is-vcentered"></td>');
+                    if (tfsec.location) {
+                        startLineTd.text(tfsec.location.start_line);
+                    }
+                    tfsecRow.append(startLineTd);
+
+                    let endLineTd = $('<td class="is-vcentered"></td>');
+                    if (tfsec.location) {
+                        endLineTd.text(tfsec.location.end_line);
+                    }
+                    tfsecRow.append(endLineTd);
+
+                    let impactTd = $('<td class="is-vcentered"></td>');
+                    impactTd.text(tfsec.impact);
+                    tfsecRow.append(impactTd);
+
+                    let resolutionTd = $('<td class="is-vcentered"></td>');
+                    resolutionTd.text(tfsec.resolution);
+                    tfsecRow.append(resolutionTd);
+
+                    let resourcesTd = $('<td class="is-vcentered"></td>');
+                    resourcesTd.html('<br/>');
+                    if (tfsec.links) {
+                        for (var i = 0; i < tfsec.links.length; i++)
+                        {
+                            resourcesTd.append(` - <a href="${tfsec.links[i]}" target="_blank" rel="noopener noreferrer">${tfsec.links[i]}</a><br/>`);
+                        }
+                    }
+                    tfsecRow.append(resourcesTd);
+
+                    tfsecTabTbody.append(tfsecRow);
+                });
+
+                // Show tab link
+                $('#module-tab-link-security-issues').removeClass('default-hidden');
+            }
+
+            $("#security-issues-table").DataTable({
+                order: [[1, 'asc']],
+                autoWidth: false,
+                columnDefs: [
+                    {
+                        targets: [2, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+                        className: "none"
+                    },
+                    {
+                        targets: [1],
+                        width: "1%"
+                    },
+                ],
+                rowGroup: {
+                    dataSrc: [2]
+                },
+                pagingType: "full_numbers_no_ellipses",
+                lengthMenu: [
+                    [25, 50, -1],
+                    [25, 50, 'All'],
+                ],
+            });
+
+            resolve(true);
+        });
+    }
+}
+
 class ResourcesTab extends ModuleDetailsTab {
+    constructor(moduleDetails, graphUrl) {
+        super(moduleDetails);
+        this._graphUrl = graphUrl;
+    }
     get name() {
         return 'resources';
     }
     async render() {
         this._renderPromise = new Promise(async (resolve) => {
+            // Populate link to resources graph
+            $('#resourceDependencyGraphLink').attr("href", this._graphUrl);
+
             let resourceTab = $("#module-tab-resources");
             let resourceTabTbody = resourceTab.find("tbody");
             this._moduleDetails.resources.forEach((resource) => {
@@ -348,10 +607,17 @@ class IntegrationsTab extends ModuleDetailsTab {
     async render() {
         this._renderPromise = new Promise(async (resolve) => {
             let config = await getConfig();
+            let loggedIn = await isLoggedIn();
+
             if (config.ALLOW_MODULE_HOSTING) {
                 $("#module-integrations-upload-container").removeClass('default-hidden');
             }
-            if (!config.PUBLISH_API_KEYS_ENABLED) {
+            if (!config.PUBLISH_API_KEYS_ENABLED ||
+                    loggedIn && (
+                        loggedIn.site_admin ||
+                        Object.keys(loggedIn.namespace_permissions).indexOf(this._moduleDetails.namespace) !== -1
+                    )
+            ) {
                 $("#integrations-index-module-version-publish").removeClass('default-hidden');
             }
 
@@ -417,9 +683,20 @@ class SettingsTab extends ModuleDetailsTab {
     async render() {
         this._renderPromise = new Promise(async (resolve) => {
 
-            let loggedIn = await isLoggedIn();
-            // Return immediately if user is not logged in
-            if (! loggedIn) {
+            let userPermissions = await isLoggedIn();
+
+            // Return immediately if user does not have permission
+            // to modify settings
+            if (
+                // If user is not logged in
+                !userPermissions ||
+                // Or user is not super user and does not have
+                // full or write access to the namespace
+                (
+                    (!userPermissions.site_admin) &&
+                    ["FULL", "MODIFY"].indexOf(userPermissions.namespace_permissions[this._moduleDetails.namespace]) === -1
+                )
+            ) {
                 resolve(false);
                 return;
             }
@@ -429,7 +706,7 @@ class SettingsTab extends ModuleDetailsTab {
             }
 
             // Check if namespace is auto-verified and, if so, show message
-            $.get(`/v1/terrareg/namespaces/${this._moduleDetails.namespace}`, (namespaceDetails) => {
+            getNamespaceDetails(this._moduleDetails.namespace).then((namespaceDetails) => {
                 if (namespaceDetails.is_auto_verified) {
                     $('#settings-verified-auto-verified-message').removeClass('default-hidden');
                 }
@@ -443,7 +720,7 @@ class SettingsTab extends ModuleDetailsTab {
                 let customGitProvider = $('<option></option>');
                 customGitProvider.val('');
                 customGitProvider.text('Custom');
-                if (! this._moduleDetails.git_provider_id) {
+                if (!this._moduleDetails.git_provider_id) {
                     customGitProvider.attr('selected', '');
                 }
                 gitProviderSelect.append(customGitProvider);
@@ -501,130 +778,637 @@ class SettingsTab extends ModuleDetailsTab {
     }
 }
 
+class UsageBuilderRowFactory {
+    constructor(terraregConfig) {
+        this.terraregConfig = terraregConfig;
+    }
+    getRowFromConfig(config) {
+        switch (config.type) {
+            case "text": {
+                return new UsageBuilderTextRow(config);
+            }
+            case "list": {
+                return new UsageBuilderListRow(config);
+            }
+            case "number": {
+                return new UsageBuilderNumberRow(config);
+            }
+            case "boolean": {
+                return new UsageBuilderBooleanRow(config);
+            }
+            case "select": {
+                return new UsageBuilderSelectRow(config);
+            }
+            case "static": {
+                return new UsageBuilderStaticRow(config);
+            }
+            default: {
+                console.log('Unknown usage builder row type:', config.type);
+                break;
+            }
+        }
+    }
+    getAnalyticsRow() {
+        return new UsageBuilderAnalyticstokenRow(this.terraregConfig);
+    }
+}
+
+class BaseUsageBuilderRow {
+    constructor(config) {
+        this.config = config;
+        this._inputRow = undefined;
+    }
+
+    get name() {
+        return this.config.name;
+    }
+
+    get inputId() {
+        return `usageBuilderInput-${this.name}`;
+    }
+    get inputIdHash() {
+        return `#${this.inputId}`;
+    }
+
+    get required() {
+        return this.config.required;
+    }
+
+    getInputRow() {
+
+        let inputRow = $('<tr></tr>');
+
+        let inputNameTd = $('<td></td>');
+        inputNameTd.attr('style', 'width: 10%');
+        inputNameTd.text(this.name);
+        inputRow.append(inputNameTd);
+
+        let requiredTd = $('<td></td>');
+        inputNameTd.attr('style', 'width: 10%');
+        requiredTd.text(this.required === true ? "Yes" : "No");
+        inputRow.append(requiredTd);
+
+        let additionalHelpTd = $('<td></td>');
+        additionalHelpTd.attr('style', 'width: 50%');
+        additionalHelpTd.text(this.config.additional_help ? this.config.additional_help : '');
+        inputRow.append(additionalHelpTd);
+
+        let valueTd = $('<td></td>');
+        valueTd.attr('style', 'width: 20%');
+
+        this.generateInputDiv(valueTd);
+        inputRow.append(valueTd);
+        this._inputRow = inputRow;
+
+        return inputRow;
+    }
+
+    quoteString(input) {
+        // Place input value directly into double quotes.
+        // Escape backslashes and then escape double quotes.
+        if (this.config.quote_value && typeof input !== "undefined") {
+            return '"' + input.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+        } else {
+            return input;
+        }
+    }
+
+    getTerraformContent(optionalEnabled) {
+        if (this.config.required === false && optionalEnabled === false) {
+            return {
+                'body': '',
+                'additionalContent': ''
+            };
+        }
+
+        return this._getTerraformContent()
+    }
+}
+
+class UsageBuilderStaticRow extends BaseUsageBuilderRow {
+    getInputRow() {
+        return null;
+    }
+
+    _getTerraformContent() {
+        let varInput = this.quoteString(this.config.value);
+        return {
+            'body': `\n  ${this.name} = ${varInput}`,
+            'additionalContent': ''
+        };
+    }
+}
+
+class UsageBuilderTextRow extends BaseUsageBuilderRow {
+    generateInputDiv(valueTd) {
+        let placeholder = this.config.default_value
+        if (typeof placeholder === 'object') {
+            placeholder = JSON.stringify(placeholder)
+        }
+        let inputDiv = $('<input />');
+        inputDiv.addClass('input');
+
+        inputDiv.attr('type', 'text');
+
+        inputDiv.attr('id', this.inputId);
+        inputDiv.attr('placeholder', placeholder);
+        valueTd.append(inputDiv);
+    }
+
+    _getTerraformContent() {
+        let userValue = this._inputRow.find(this.inputIdHash).val()
+        let varInput = this.quoteString(userValue);
+
+        if (this.config.required === false && userValue === "") {
+            return {
+                'body': '',
+                'additionalContent': ''
+            };
+        }
+        return {
+            'body': `\n  ${this.name} = ${varInput}`,
+            'additionalContent': ''
+        };
+    }
+}
+
+class UsageBuilderNumberRow extends BaseUsageBuilderRow {
+    generateInputDiv(valueTd) {
+        let placeholder = this.config.default_value
+        if (typeof placeholder === 'object') {
+            placeholder = JSON.stringify(placeholder)
+        }
+        let inputDiv = $('<input />');
+        inputDiv.addClass('input');
+
+        inputDiv.attr('type', 'number');
+
+        inputDiv.attr('id', this.inputId);
+        inputDiv.attr('placeholder', placeholder);
+        valueTd.append(inputDiv);
+    }
+
+    _getTerraformContent() {
+        let varInput = this._inputRow.find(this.inputIdHash).val();
+
+        if (this.config.required === false && varInput == '') {
+            return {
+                'body': '',
+                'additionalContent': ''
+            };
+        }
+        return {
+            'body': `\n  ${this.name} = ${varInput}`,
+            'additionalContent': ''
+        };
+    }
+}
+
+class UsageBuilderListRow extends BaseUsageBuilderRow {
+    generateInputDiv(valueTd) {
+        let placeholder = this.config.default_value
+        if (typeof placeholder === 'object') {
+            placeholder = JSON.stringify(placeholder)
+        }
+        let inputDiv = $('<input />');
+        inputDiv.addClass('input');
+        inputDiv.attr('type', 'text');
+
+        // Add class for input ID
+        inputDiv.addClass(this.inputId);
+
+        // Append 0 to input ID, for first input for list
+        let inputId = this.inputId + '0';
+        inputDiv.on('keyup', () => {
+
+            // Check all list inputs, remove any empty ones
+            // and add an additional input, if last input is populated
+            let inputIdName = `usageBuilderInput-${this.name}`;
+            let listInputDivs = $(`.${inputIdName}`);
+            for (const inputDiv of listInputDivs) {
+                let val = inputDiv.value;
+
+                // Check if input div is last item
+                if (listInputDivs.index(inputDiv) == (listInputDivs.length - 1)) {
+
+                    // If input contains a value, clone and create new input
+                    if (val) {
+                        let newInput = $(inputDiv).clone();
+
+                        // Update Id of new input
+                        newInput.attr('id', inputIdName + listInputDivs.length);
+
+                        // Reset value of new iput
+                        newInput.val('');
+
+                        // Bind original keyup method to new input div
+                        newInput.on('keyup', $._data(inputDiv).events.keyup[0].handler);
+
+                        // Add new input after the original
+                        newInput.insertAfter(inputDiv);
+                    }
+                } else {
+                    // Otherwise, check if item is empty
+                    if (!val) {
+                        inputDiv.remove();
+                    }
+                }
+            }
+        });
+
+        inputDiv.attr('id', inputId);
+        inputDiv.attr('placeholder', placeholder);
+        valueTd.append(inputDiv);
+    }
+
+    _getTerraformContent() {
+        let valueList = [];
+
+        let listInputDivs = this._inputRow.find(`.${this.inputId}`);
+        for (const inputDiv of listInputDivs) {
+            let val = inputDiv.value;
+
+            // Check if input div is last item
+            if (listInputDivs.index(inputDiv) == (listInputDivs.length - 1)) {
+
+                // If input contains a value add to valueList
+                if (val) {
+
+                    // Add value of current input to list
+                    valueList.push(this.quoteString(val));
+                }
+            } else {
+                // If input contains a value add to valueList
+                if (val) {
+                    valueList.push(this.quoteString(val));
+                }
+            }
+        }
+
+        let varInput = `[${valueList.join(', ')}]`;
+        if (this.config.required === false && valueList.length == 0) {
+            return {
+                'body': '',
+                'additionalContent': ''
+            };
+        }
+        return {
+            'body': `\n  ${this.name} = ${varInput}`,
+            'additionalContent': ''
+        };
+    }
+}
+
+class UsageBuilderBooleanRow extends BaseUsageBuilderRow {
+    constructor(config) {
+        super(config);
+        this._inputShown = true;
+    }
+    generateInputDiv(valueTd, forceShowCheckbox=false) {
+        // Remove all child elements from the inputDiv
+        valueTd.empty();
+
+        // If the config is not required and default value is null,
+        // show code default value with a link to enable modification,
+        // which will re-call this function, forcing the display of the checkbox input
+        if (this.config.required === false && this.config.default_value == null && forceShowCheckbox === false) {
+            this._inputShown = false;
+
+            let nullText = $('<code>null</code>');
+            valueTd.append(nullText);
+            valueTd.append('<br />');
+
+            let changeLink = $('<a>Modify</a>');
+            changeLink.bind('click', () => {
+                this.generateInputDiv(valueTd, true);
+            });
+            valueTd.append(changeLink);
+            return;
+        }
+        this._inputShown = true;
+
+        let inputDiv = $('<input />');
+        inputDiv.addClass('checkbox');
+        inputDiv.attr('type', 'checkbox');
+        inputDiv.attr('id', this.inputId);
+
+        if (this.config.default_value == true) {
+            inputDiv.prop( "checked", true )
+        }
+        valueTd.append(inputDiv);
+
+        // Add link to remove input checkbox for optional value
+        if (this.config.required == false && this.config.default_value == null) {
+            valueTd.append('<br />');
+            let changeLink = $('<a>Undo</a>');
+            changeLink.bind('click', () => {
+                this.generateInputDiv(valueTd);
+            });
+            valueTd.append(changeLink);
+        }
+    }
+
+    _getTerraformContent() {
+        // If input is now shown, skip the row
+        if (!this._inputShown) {
+            return {
+                'body': '',
+                'additionalContent': ''
+            };
+        }
+
+        let is_checked = this._inputRow.find(this.inputIdHash).prop('checked');
+
+        // If default value is shown (i.e. the value is optional),
+        // do not show any Terraform output
+        if (is_checked === this.config.default_value) {
+            return {
+                'body': '',
+                'additionalContent': ''
+            };
+        }
+        let varInput = JSON.stringify(is_checked);
+
+        return {
+            'body': `\n  ${this.name} = ${varInput}`,
+            'additionalContent': ''
+        };
+    }
+}
+
+class UsageBuilderSelectRow extends BaseUsageBuilderRow {
+    generateInputDiv(valueTd) {
+        let inputDiv = $('<div></div>');
+        inputDiv.addClass('select');
+        let inputSelect = $('<select></select>');
+        let inputId = this.inputId;
+        inputSelect.attr('id', inputId);
+        this.config.choices.forEach((inputChoice, itx) => {
+            // If choices is list of strings, use the string as the name,
+            // otherwise, use name attribute of object.
+            let inputName = typeof inputChoice === 'string' ? inputChoice : inputChoice.name;
+            let option = $('<option></option>');
+            option.val(itx);
+            option.text(inputName);
+            inputSelect.append(option);
+        });
+        // If custom input is available, add to select
+        if (this.config.allow_custom) {
+            inputSelect.on('change', function () {
+                var selectedText  = this.selectedOptions[0].value;
+                inputId = $(this).prop('id');
+                let customInputId = `#${inputId}-customValue`;
+                // Check if custom type
+                if (selectedText == 'custom') {
+                    // Display custom text input
+                    $(customInputId).attr("style", "display:block");
+                } else {
+                    // Hide custom input and clear value
+                    $(customInputId).attr("style", "display:none")
+                    $(customInputId).value = '';
+                }
+            });
+            let option = $('<option></option>');
+            option.val('custom');
+            option.text('Custom Value');
+            inputSelect.append(option);
+        }
+        inputDiv.append(inputSelect);
+
+        valueTd.append(inputDiv);
+
+        // If custom input is available, add hidden input for custom input
+        let customInput = $('<input />');
+        customInput.addClass('input');
+        customInput.attr('type', 'text');
+        customInput.attr('id', `${inputId}-customValue`);
+        customInput.css('display', 'none');
+        valueTd.append(customInput);
+    }
+
+    _getTerraformContent() {
+        let userInput = '';
+        let varInput = '';
+        let additionalContent = '';
+
+
+        let selectIndex = this._inputRow.find(this.inputIdHash).val();
+        let customInputId = `${this.inputId}-customValue`;
+
+        // Check if custom type
+        if (selectIndex == 'custom') {
+
+            // Use value of custom input as output
+            userInput = this._inputRow.find(customInputId).val()
+        } else {
+            // If choice is a string, add the choice name to as the value
+            if (typeof this.config.choices[selectIndex] === 'string') {
+                userInput = this.config.choices[selectIndex];
+            } else {
+                // Otherwise, use the attribute for the value
+                userInput = this.config.choices[selectIndex].value;
+
+                // If object has additional_content, add it to the TF output
+                if (this.config.choices[selectIndex].additional_content) {
+                    additionalContent += this.config.choices[selectIndex].additional_content + '\n\n';
+                }
+            }
+        }
+        varInput = this.quoteString(userInput)
+
+        if (this.config.required === false && userInput == "") {
+            return {
+                'body': '',
+                'additionalContent': ''
+            };
+        }
+        return {
+            'body': `\n  ${this.name} = ${varInput}`,
+            'additionalContent': additionalContent
+        };
+    }
+}
+
+class UsageBuilderAnalyticstokenRow extends BaseUsageBuilderRow {
+    constructor(terraregConfig) {
+        super(null);
+        this.terraregConfig = terraregConfig;
+        this._inputDiv = undefined;
+    }
+    getInputRow() {
+        if (this.terraregConfig.DISABLE_ANALYTICS) {
+            return null;
+        }
+
+        // Setup analytics input row
+        let analyticsTokenInputRow = $('<tr></tr>');
+
+        let analyticsTokenName = $('<td></td>');
+        analyticsTokenName.text(this.terraregConfig.ANALYTICS_TOKEN_PHRASE);
+        analyticsTokenInputRow.append(analyticsTokenName);
+
+        let analyticsrequiredTd = $('<td></td>');
+        analyticsrequiredTd.text("Yes");
+        analyticsTokenInputRow.append(analyticsrequiredTd);
+
+        let analyticsTokenDescription = $('<td></td>');
+        analyticsTokenDescription.text(this.terraregConfig.ANALYTICS_TOKEN_DESCRIPTION);
+        analyticsTokenInputRow.append(analyticsTokenDescription);
+
+        let analyticsTokenInputTd = $('<td></td>');
+        let analyticsTokenInputField = $('<input />');
+        analyticsTokenInputField.attr('class', 'input');
+        analyticsTokenInputField.attr('id', 'usageBuilderAnalyticsToken');
+        analyticsTokenInputField.attr('type', 'text');
+        analyticsTokenInputField.attr('placeholder', this.terraregConfig.EXAMPLE_ANALYTICS_TOKEN);
+        this._inputDiv = analyticsTokenInputField;
+        analyticsTokenInputTd.append(analyticsTokenInputField);
+        analyticsTokenInputRow.append(analyticsTokenInputTd);
+
+        return analyticsTokenInputRow;
+    }
+
+    getValue() {
+        if (this.terraregConfig.DISABLE_ANALYTICS) {
+            return "";
+        }
+        if (this._inputDiv) {
+            return `${this._inputDiv.val()}__`;
+        }
+        return "__";
+    }
+}
+
+
 class UsageBuilderTab extends ModuleDetailsTab {
+    constructor(moduleDetails) {
+        super(moduleDetails);
+        this._inputRows = [];
+        this._analyticsInput = undefined;
+    }
     get name() {
         return 'usage-builder';
     }
     async render() {
         this._renderPromise = new Promise(async (resolve) => {
-            let config = await getConfig();
             let usageBuilderTable = $('#usageBuilderTable');
-
-            // Setup analytics input row
-            let analyticsTokenInputRow = $('<tr></tr>');
-
-            let analyticsTokenName = $('<td></td>');
-            analyticsTokenName.text(config.ANALYTICS_TOKEN_PHRASE);
-            analyticsTokenInputRow.append(analyticsTokenName);
-
-            let analyticsTokenDescription = $('<td></td>');
-            analyticsTokenDescription.text(config.ANALYTICS_TOKEN_DESCRIPTION);
-            analyticsTokenInputRow.append(analyticsTokenDescription);
-
-            let analyticsTokenInputTd = $('<td></td>');
-            let analyticsTokenInputField = $('<input />');
-            analyticsTokenInputField.attr('class', 'input');
-            analyticsTokenInputField.attr('id', 'usageBuilderAnalyticsToken');
-            analyticsTokenInputField.attr('type', 'text');
-            analyticsTokenInputField.attr('placeholder', config.EXAMPLE_ANALYTICS_TOKEN);
-            analyticsTokenInputField.bind('keyup', () => {updateUsageBuilderOutput(this._moduleDetails)});
-            analyticsTokenInputTd.append(analyticsTokenInputField);
-            analyticsTokenInputRow.append(analyticsTokenInputTd);
-
-            usageBuilderTable.append(analyticsTokenInputRow);
 
             let inputVariables = await getUsageBuilderVariables(this._moduleDetails.id);
 
-            if (inputVariables === null || ! inputVariables.length) {
+            if (inputVariables === null || !inputVariables.length) {
                 // If there are no variables present in the usage builder,
                 // then exit early
                 resolve(false);
                 return;
             }
 
-            // Show tab
-            $('#module-tab-link-usage-builder').removeClass('default-hidden');
-            resolve(true);
+            let config = await getConfig();
+
+            let usageBuilderRowFactory = new UsageBuilderRowFactory(config);
+
+            this._analyticsInput = usageBuilderRowFactory.getAnalyticsRow();
+            let analyticsRow = this._analyticsInput.getInputRow();
+            if (analyticsRow !== null) {
+                usageBuilderTable.append(this._analyticsInput.getInputRow());
+            }
 
             // Build input table
             inputVariables.forEach((inputVariable) => {
-                let inputId = `usageBuilderInput-${inputVariable.name}`;
 
-                let inputRow = $('<tr></tr>');
-                let inputNameTd = $('<td></td>');
-                inputNameTd.text(inputVariable.name);
-                inputRow.append(inputNameTd);
-
-                let additionalHelpTd = $('<td></td>');
-                additionalHelpTd.text(inputVariable.additional_help ? inputVariable.additional_help : '');
-                inputRow.append(additionalHelpTd);
-
-                let valueTd = $('<td></td>');
-
-                if (inputVariable.type == 'text' || inputVariable.type == 'list') {
-                    let inputDiv = $('<input />');
-                    inputDiv.addClass('input');
-                    inputDiv.attr('type', 'text');
-                    inputDiv.attr('id', inputId);
-                    inputDiv.bind('keyup', () => {updateUsageBuilderOutput(this._moduleDetails)});
-                    valueTd.append(inputDiv);
-
-                } else if (inputVariable.type == 'boolean') {
-
-                    let inputDiv = $('<input />');
-                    inputDiv.addClass('checkbox');
-                    inputDiv.attr('type', 'checkbox');
-                    inputDiv.attr('id', inputId);
-                    inputDiv.attr('value', 'true');
-                    inputDiv.bind('onchange', () => {updateUsageBuilderOutput(this._moduleDetails)});
-                    valueTd.append(inputDiv);
-
-                } else if (inputVariable.type == 'select') {
-                    let inputDiv = $('<div></div>');
-                    inputDiv.addClass('select');
-                    let inputSelect = $('<select></select>');
-                    inputSelect.attr('id', inputId);
-                    inputSelect.bind('change', () => {updateUsageBuilderOutput(this._moduleDetails)});
-
-                    inputVariable.choices.forEach((inputChoice, itx) => {
-                        // If choices is list of strings, use the string as the name,
-                        // otherwise, use name attribute of object.
-                        let inputName = typeof inputChoice === 'string' ? inputChoice : inputChoice.name;
-                        let option = $('<option></option>');
-                        option.val(itx);
-                        option.text(inputName);
-                        inputSelect.append(option);
-                    });
-                    // If custom input is available, add to select
-                    if (inputVariable.allow_custom) {
-                        let option = $('<option></option>');
-                        option.val('custom');
-                        option.text('Custom Value');
-                        inputSelect.append(option);
+                let inputRowObject = usageBuilderRowFactory.getRowFromConfig(inputVariable);
+                if (inputRowObject) {
+                    this._inputRows.push(inputRowObject);
+                    let inputRow = inputRowObject.getInputRow();
+                    if (inputRow) {
+                        usageBuilderTable.append(inputRow);
                     }
-                    inputDiv.append(inputSelect);
-
-                    valueTd.append(inputDiv);
-
-                    // If custom input is available, add hidden input for custom input
-                    let customInput = $('<input />');
-                    customInput.addClass('input');
-                    customInput.attr('type', 'text');
-                    customInput.attr('id', `${inputId}-customValue`);
-                    customInput.bind('keyup', () => {updateUsageBuilderOutput(this._moduleDetails)});
-                    customInput.css('display', 'none');
-                    valueTd.append(customInput);
-
-                } else {
-                    // Skip displaying other types of variables in input
-                    return;
                 }
-
-                inputRow.append(valueTd);
-
-                $('#usageBuilderTable').append(inputRow);
             });
+            globalThis.usageBuilderUseOptional = false
+            globalThis.moduleDetails = this._moduleDetails
+            globalThis.usageBuilderTab = this;
+            globalThis.usageBuilderTable = $("#usage-builder-table").DataTable({
+                columnDefs: [
+                    {
+                        targets: [0, 1],
+                        width: "1%"
+                    },
+                ],
+                order: [[1, 'desc'], [0, 'asc']],
+                ordering: false,
+                // pagingType: "full_numbers_no_ellipses",
+                lengthMenu: [
+                    [10, 25, 50, -1],
+                    [10, 25, 50, 'All'],
+                ],
+                // dom: 'Bfrtip',
+                buttons: {
+                    dom: {
+                        button: {
+                            tag: 'button',
+                            className: 'button is-outlined'
+                        }
+                    },
+                    buttons: [
+                        {
+                            text: 'Show Optional Variables',
+                            className: 'is-dark',
+                            action: function (e, dt, node, config) {
+                                if (dt.column(1).search() === 'Yes') {
+                                    this.text('Hide Optional Variables');
+                                    dt.column(1).search('').draw(true);
+                                    globalThis.usageBuilderUseOptional = true
+                                } else {
+                                    this.text('Show Optional Variables');
+                                    dt.column(1).search('Yes').draw(true);
+                                    globalThis.usageBuilderUseOptional = false
+                                }
+                            }
+                        },
+                        {
+                            text: 'Generate Terraform',
+                            className: 'is-info',
+                            action: function ( e, dt, node, conf ) {
+                                e.preventDefault();
+                                globalThis.usageBuilderTab.updateUsageBuilderOutput()
+                            }
+                        }
+                    ],
+                },
+                searchCols: [
+                    null,
+                    { search: "Yes" },
+                ]
+            });
+
+            globalThis.usageBuilderTable.buttons().container()
+                .appendTo( $('div.column.is-full', globalThis.usageBuilderTable.table().container()).eq(0) );
+
+            // Show tab
+            $('#module-tab-link-usage-builder').removeClass('default-hidden');
+            $('#example-link-usage-builder').removeClass('default-hidden');
+            resolve(true);
+
         });
+    }
+
+    async updateUsageBuilderOutput() {
+        let outputTf = '';
+        let additionalContent = '';
+        let moduleDetails = globalThis.moduleDetails;
+    
+        let analytics_token = this._analyticsInput.getValue();
+    
+        for (let inputRow of this._inputRows) {
+            let content = inputRow.getTerraformContent(globalThis.usageBuilderUseOptional);
+            outputTf += content.body
+            additionalContent += content.additionalContent;
+        }
+        $('#usageBuilderOutput').html(`${additionalContent}module "${moduleDetails.name}" {
+  source  = "${window.location.hostname}/${analytics_token}${moduleDetails.module_provider_id}"
+  version = "${moduleDetails.terraform_example_version_string}"
+${outputTf}
+}`);
     }
 }
 
@@ -686,7 +1470,7 @@ function getCurrentObjectId(data, stopAt = undefined) {
         return id;
     }
 
-    if (! data.version) {
+    if (!data.version || data.version == 'latest') {
         return id;
     }
     id += `/${data.version}`;
@@ -747,65 +1531,87 @@ function populateVersionSelect(moduleDetails) {
 
     let currentVersionFound = false;
     let currentIsLatestVersion = false;
-    moduleDetails.versions.forEach((version, itx) => {
-        let versionOption = $("<option></option>");
 
-        // Set value of option to view URL of module version
-        versionOption.val(`/modules/${moduleDetails.namespace}/${moduleDetails.name}/${moduleDetails.provider}/${version}`);
+    let userPreferences = getUserPreferences();
 
-        let versionText = version;
-        // Add '(latest)' suffix to the first (latest) version
-        if (itx == 0) {
-            versionText += " (latest)";
-        }
-        versionOption.text(versionText);
+    $.get(`/v1/terrareg/modules/${moduleDetails.module_provider_id}/versions` +
+        `?include-beta=${userPreferences["show-beta-versions"]}&` +
+        `include-unpublished=${userPreferences["show-unpublished-versions"]}`).then((versions) => {
+            let foundLatest = false;
+            for (let versionDetails of versions) {
+                let versionOption = $("<option></option>");
+                let isLatest = false;
 
-        // Set version that matches current module to selected
-        if (version == moduleDetails.version) {
-            versionOption.attr("selected", "");
-            currentVersionFound = true;
+                // Set value of option to view URL of module version
+                versionOption.val(`/modules/${moduleDetails.namespace}/${moduleDetails.name}/${moduleDetails.provider}/${versionDetails.version}`);
 
-            // Determine if the current version is the latest version
-            // (first in list of versions)
-            if (itx == 0) {
-                currentIsLatestVersion = true;
+                let versionText = versionDetails.version;
+                // Add '(latest)' suffix to the first (latest) version
+                if (foundLatest == false && versionDetails.beta == false && versionDetails.published == true) {
+                    versionText += " (latest)";
+                    foundLatest = true;
+                    isLatest = true;
+                } else {
+                    if (versionDetails.beta) {
+                        versionText += ' (beta)';
+                    }
+                    if (versionDetails.published == false) {
+                        versionText += ' (unpublished)';
+                    }
+                }
+                versionOption.text(versionText);
+
+                // Set version that matches current module to selected
+                if (versionDetails.version == moduleDetails.version) {
+                    versionOption.attr("selected", "");
+                    currentVersionFound = true;
+
+                    // Determine if the current version is the latest version
+                    // (first in list of versions)
+                    if (isLatest) {
+                        currentIsLatestVersion = true;
+                    }
+                }
+
+                versionSelection.append(versionOption);
             }
-        }
 
-        versionSelection.append(versionOption);
-    });
+            // If current version has not been found, add fake version to drop-down
+            if (currentVersionFound == false) {
+                let versionOption = $("<option></option>");
+                let suffix = '';
+                if (moduleDetails.beta) {
+                    suffix += ' (beta)';
+                }
+                if (!moduleDetails.published) {
+                    suffix += ' (unpublished)';
+                }
+                versionOption.text(`${moduleDetails.version}${suffix}`);
+                versionOption.attr("selected", "");
+                versionSelection.append(versionOption);
 
-    // If current version has not been found, add fake version to drop-down
-    if (currentVersionFound == false) {
-        let versionOption = $("<option></option>");
-        let suffix = '';
-        if (moduleDetails.beta) {
-            suffix += ' (beta)';
-
-            // If the beta module is published, show warning about
-            // beta version and how to use it.
-            if (moduleDetails.published) {
-                $("#beta-warning").removeClass('default-hidden');
             }
-        }
-        if (! moduleDetails.published) {
-            suffix += ' (unpublished)';
+            if (!currentIsLatestVersion && !moduleDetails.beta && moduleDetails.published) {
+                // Otherwise, if user is not viewing the latest version,
+                // display warning
+                $("#non-latest-version-warning").removeClass('default-hidden');
+            }
 
-            // Add warning to page about unpublished version
-            $("#unpublished-warning").removeClass('default-hidden');
-        }
-        versionOption.text(`${moduleDetails.version}${suffix}`);
-        versionOption.attr("selected", "");
-        versionSelection.append(versionOption);
+            if (moduleDetails.beta) {
+                // If the beta module is published, show warning about
+                // beta version and how to use it.
+                if (moduleDetails.published) {
+                    $("#beta-warning").removeClass('default-hidden');
+                }
+            }
+            if (!moduleDetails.published) {
+                // Add warning to page about unpublished version
+                $("#unpublished-warning").removeClass('default-hidden');
+            }
 
-    } else if (! currentIsLatestVersion) {
-        // Otherwise, if user is not viewing the latest version,
-        // display warning
-        $("#non-latest-version-warning").removeClass('default-hidden');
-    }
-
-    // Show version drop-down
-    $('#details-version').removeClass('default-hidden');
+            // Show version drop-down
+            $('#details-version').removeClass('default-hidden');
+        });
 }
 
 /*
@@ -907,6 +1713,23 @@ function setSourceUrl(sourceUrl) {
 }
 
 /*
+ * Set custom links
+ *
+ * @param moduleDetails
+ */
+function populateCustomLinks(moduleDetails) {
+    let customLinkParent = $('#custom-links');
+    for (let linkDetails of moduleDetails.custom_links) {
+        let link = $('<a></a>');
+        link.addClass('custom-link');
+        link.attr('href', linkDetails.url);
+        link.text(linkDetails.text);
+        customLinkParent.append(link);
+        customLinkParent.append('<br />');
+    }
+}
+
+/*
  * Populate submodule selection options
  *
  * @param moduleDetails Terrareg module details
@@ -996,22 +1819,50 @@ function onSubmoduleSelectChange(event) {
  *
  * @param moduleDetails Terrareg module details
  */
-async function populateTerraformUsageExample(moduleDetails, additionalPath = undefined) {
+async function populateTerraformUsageExample(moduleDetails, submoduleDetails) {
     let config = await getConfig();
+    let userPreferences = getUserPreferences();
+
+    // Check if module has been published - if not, do not
+    // show usage example
+    if (! moduleDetails.published) {
+        return;
+    }
+
+    // If analytics is disabled, hide the instruction to replace
+    // the analytics token
+    if (config.DISABLE_ANALYTICS) {
+        $('#usage-example-analytics-token-instruction').addClass('default-hidden');
+    }
+
+    // Populate supported Terraform versions
+    if (submoduleDetails.terraform_version_constraint) {
+        $('#supported-terraform-versions-data').text(submoduleDetails.terraform_version_constraint);
+        $('#supported-terraform-versions').removeClass('default-hidden');
+    }
+
+    // If version compatibility is in the result
+    if (submoduleDetails.version_compatibility !== undefined) {
+        // Convert to result object
+        let versionCompatibilityResult = getTerraformCompatibilityResultObject(submoduleDetails.version_compatibility);
+        if (versionCompatibilityResult) {
+            // If a valid result object was generated, update text in div and display
+            $('#supported-terraform-compatible-target-version').text(userPreferences["terraform-compatibility-version"]);
+            $('#supported-terraform-compatible-tag').text(versionCompatibilityResult.text);
+            $('#supported-terraform-compatible-tag').addClass(`is-${versionCompatibilityResult.color}`);
+            $('#supported-terraform-compatible').removeClass('default-hidden');
+        }
+    }
 
     // Update labels for example analytics token and phrase
     $("#usage-example-analytics-token").text(config.EXAMPLE_ANALYTICS_TOKEN);
     $("#usage-example-analytics-token-phrase").text(config.ANALYTICS_TOKEN_PHRASE);
 
-    // Add example terraform call to source section
-    $("#usage-example-terraform").text(
-        `module "${moduleDetails.name}" {
-  source  = "${window.location.hostname}/${config.EXAMPLE_ANALYTICS_TOKEN}__${moduleDetails.module_provider_id}${additionalPath ? "//" + additionalPath : ""}"
-  version = "${moduleDetails.terraform_example_version_string}"
+    // Add example Terraform call to source section
+    $("#usage-example-terraform").text(submoduleDetails.usage_example);
 
-  # Provide variables here
-}`
-    );
+    // Perform syntax highlighting
+    window.Prism.highlightElement(document.getElementById("usage-example-terraform"));
 
     // Show container
     $('#usage-example-container').removeClass('default-hidden');
@@ -1091,6 +1942,7 @@ function selectExampleFile(eventTarget) {
         url: `/v1/terrareg/modules/${moduleId}/examples/file/${filePath}`,
         success: function (data) {
             $("#example-file-content").html(data);
+            window.Prism.highlightElement(document.getElementById("example-file-content"));
         },
     });
 }
@@ -1133,11 +1985,7 @@ function indexModuleVersion(moduleDetails) {
                         inProgressMessage.addClass('default-hidden');
 
                         // Display any errors
-                        if (res.responseJSON && res.responseJSON.message) {
-                            errorMessage.html(res.responseJSON.message);
-                        } else {
-                            errorMessage.html("An unexpected error occurred when publishing module version");
-                        }
+                        errorMessage.html(failedResponseToErrorString(res));
                         errorMessage.removeClass('default-hidden');
                     });
             } else {
@@ -1147,11 +1995,7 @@ function indexModuleVersion(moduleDetails) {
         })
         .fail((res) => {
             // Render and show error
-            if (res.responseJSON && res.responseJSON.message) {
-                errorMessage.html(res.responseJSON.message);
-            } else {
-                errorMessage.html("An unexpected error occurred when indexing module");
-            }
+            errorMessage.html(failedResponseToErrorString(res));
             errorMessage.removeClass('default-hidden');
             // Hide in-progress
             inProgressMessage.addClass('default-hidden');
@@ -1174,7 +2018,7 @@ function enableBackToParentLink(moduleDetails) {
  */
 async function enableTerraregExclusiveTags() {
     let config = await getConfig();
-    if (! config.DISABLE_TERRAREG_EXCLUSIVE_LABELS) {
+    if (!config.DISABLE_TERRAREG_EXCLUSIVE_LABELS) {
         $.find('.terrareg-exclusive').forEach((tag) => {
             $(tag).removeClass('default-hidden');
         });
@@ -1205,11 +2049,11 @@ function deleteModuleVersion(moduleDetails) {
             csrf_token: $('#settings-csrf-token').val()
         }),
         contentType: 'application/json'
-    }).done(()=> {
+    }).done(() => {
         // Reidrect to module provider page.
         // This will automatically redirect back
         // down the path to valid existing object.
-        window.location.href = `/modules/${ moduleDetails.module_provider_id }`;
+        window.location.href = `/modules/${moduleDetails.module_provider_id}`;
     }).fail((res) => {
         if (res.status == 401) {
             $('#settings-status-error').html('You must be logged in to perform this action.<br />If you were previously logged in, please re-authentication and try again.');
@@ -1236,7 +2080,7 @@ function deleteModuleProvider(moduleDetails) {
             csrf_token: $('#settings-csrf-token').val()
         }),
         contentType: 'application/json'
-    }).done(()=> {
+    }).done(() => {
         // Reidrect to module page.
         // This will automatically redirect back
         // down the path to valid existing object.
@@ -1293,101 +2137,69 @@ function updateModuleProviderSettings(moduleDetails) {
     return false;
 }
 
-function usageBuilderQuoteString(inputVariable, input) {
-    // Place input value directly into double quotes.
-    // Escape backslashes and then escape double quotes.
-    if (inputVariable.quote_value) {
-        return '"' + input.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
-    } else {
-        return input;
-    }
-}
-
-async function updateUsageBuilderOutput(moduleDetails) {
-    let outputTf = '';
-    let additionalContent = '';
-
-    let analytics_token = $('#usageBuilderAnalyticsToken')[0].value;
-
-    let inputVariables = await getUsageBuilderVariables(moduleDetails.id);
-
-    inputVariables.forEach((inputVariable) => {
-        let inputId = `#usageBuilderInput-${inputVariable.name}`;
-        let varInput = '';
-
-        // Get value from
-        if (inputVariable.type == 'static')
-        {
-            varInput = usageBuilderQuoteString(inputVariable, inputVariable.value);
-        }
-        else if (inputVariable.type == 'text')
-        {
-            varInput = usageBuilderQuoteString(inputVariable, $(inputId)[0].value);
-        }
-        else if (inputVariable.type == 'list') {
-            varInput = `[${usageBuilderQuoteString(inputVariable, $(inputId)[0].value)}]`;
-        }
-        else if (inputVariable.type == 'boolean')
-        {
-            varInput = $(inputId).is(':checked') ? 'true' : 'false';
-        }
-        else if (inputVariable.type == 'select')
-        {
-            let selectIndex = $(inputId)[0].value;
-            let customInputId = `${inputId}-customValue`;
-
-            // Check if custom type
-            if (selectIndex == 'custom') {
-                // Display custom text input
-                $(customInputId)[0].style.display = 'block';
-
-                // Use value of custom input as output
-                varInput = usageBuilderQuoteString(inputVariable, $(customInputId)[0].value);
-            }
-            else
-            {
-                // Hide custom input and clear value
-                $(customInputId)[0].style.display = 'none';
-                $(customInputId)[0].value = '';
-
-                // If choice is a string, add the choice name to as the value
-                if (typeof inputVariable.choices[selectIndex] === 'string') {
-                    varInput = inputVariable.choices[selectIndex];
-                } else {
-                    // Otherwise, use the attribute for the value
-                    varInput = inputVariable.choices[selectIndex].value;
-
-                    // If object has additional_content, add it to the TF output
-                    if (inputVariable.choices[selectIndex].additional_content) {
-                        additionalContent += inputVariable.choices[selectIndex].additional_content + '\n\n';
-                    }
-                }
-                varInput = usageBuilderQuoteString(inputVariable, varInput);
-            }
-        }
-
-        outputTf += `\n  ${inputVariable.name} = ${varInput}`;
-    });
-
-    $('#usageBuilderOutput').html(`${additionalContent}module "${moduleDetails.name}" {
-  source  = "${window.location.hostname}/${analytics_token}__${moduleDetails.module_provider_id}"
-  version = "${moduleDetails.terraform_example_version_string}"
-${outputTf}
-}`);
-}
+function capitaliseWord(string) {
+    return string[0].toUpperCase() + string.slice(1).toLowerCase();
+  }
 
 function showSecurityWarnings(moduleDetails) {
-    let securityIssuesContainer = $('#security-issues')
-    if (moduleDetails.security_failures) {
-        securityIssuesContainer.removeClass('default-hidden');
-        $('#security-issues-text').text(`${moduleDetails.security_failures} Security issues`);
-    } else {
-        securityIssuesContainer.addClass('default-hidden');
+    if (! moduleDetails.security_results) {
+        return;
     }
+    let criticalCount = 0;
+    let highCount = 0;
+    let lowCount = 0;
+
+    // Check severity of each issue and
+    // add to severity count
+    for (let securityIssue of moduleDetails.security_results) {
+        if (securityIssue.severity == 'LOW' || securityIssue.severity == 'MEDIUM') {
+            lowCount += 1;
+        } else if (securityIssue.severity == 'HIGH') {
+            highCount += 1;
+        } else if (securityIssue.severity == 'CRITICAL') {
+            criticalCount += 1;
+        }
+    }
+    let outerTagClass = '';
+    let showSecurityLabel = false;
+
+    // Add counts to each severity tag and show tag.
+    // Check each severity in reverse order,
+    // to set priority of the outer tag class.
+    if (lowCount) {
+        showSecurityLabel = true;
+        outerTagClass = 'is-info';
+        let label = $('#result-card-label-security-issues-low-count');
+        label.text(lowCount + ' Medium/Low');
+        label.removeClass('default-hidden');
+    }
+    if (highCount) {
+        showSecurityLabel = true;
+        outerTagClass = 'is-warning';
+        let label = $('#result-card-label-security-issues-high-count');
+        label.text(highCount + ' High');
+        label.removeClass('default-hidden');
+    }
+    if (criticalCount) {
+        showSecurityLabel = true;
+        outerTagClass = 'is-danger';
+        let label = $('#result-card-label-security-issues-critical-count');
+        label.text(criticalCount + ' Critical');
+        label.removeClass('default-hidden');
+    }
+    if (!showSecurityLabel) {
+        // If no security issues found, return early,
+        // not showing security label
+        showSecurityLabel = false;
+        return;
+    }
+
+    $('#security-issues').removeClass('default-hidden');
+    $('#result-card-label-security-issues-icon').addClass(outerTagClass);
 }
 
 function showCostAnalysis(moduleDetails) {
-    if (moduleDetails.cost_analysis && moduleDetails.cost_analysis.yearly_cost) {
+    if (moduleDetails.cost_analysis && moduleDetails.cost_analysis.yearly_cost != null) {
         let yearlyCostContainer = $('#yearly-cost');
         yearlyCostContainer.removeClass('default-hidden');
         $('#yearly-cost-text').text(moduleDetails.cost_analysis.yearly_cost);
@@ -1396,6 +2208,12 @@ function showCostAnalysis(moduleDetails) {
         let yearCostLabel = $('#yearly-cost-label');
         yearCostLabel.find('#label-text').text(`$${moduleDetails.cost_analysis.yearly_cost}/yr`);
         yearCostLabel.removeClass('default-hidden');
+    }
+}
+
+function showOutdatedExtractionDataWarning(moduleDetails) {
+    if (moduleDetails.module_extraction_up_to_date === false) {
+        $('#outdated-extraction-warning').removeClass('default-hidden');
     }
 }
 
@@ -1416,7 +2234,6 @@ function setPageTitle(id) {
  * @param data Data from router
  */
 async function setupBasePage(data) {
-    createBreadcrumbs(data);
 
     let id = getCurrentObjectId(data);
 
@@ -1424,7 +2241,7 @@ async function setupBasePage(data) {
 
     // If current version is not available or there are no
     // versions, set warning and exit
-    if (! moduleDetails.version) {
+    if (!moduleDetails.version) {
         showNoAvailableVersions();
         return;
     }
@@ -1449,6 +2266,8 @@ async function setupRootModulePage(data) {
 
     let moduleDetails = await getModuleDetails(id);
 
+    createBreadcrumbs(data);
+
     setPageTitle(moduleDetails.module_provider_id);
     setModuleDescription(moduleDetails);
     setPublishedAt(moduleDetails);
@@ -1460,6 +2279,11 @@ async function setupRootModulePage(data) {
         // Register tabs in order of being displayed to user, by default
         tabFactory.registerTab(new ReadmeTab(`/v1/terrareg/modules/${moduleDetails.id}/readme_html`));
         tabFactory.registerTab(new InputsTab(moduleDetails.root));
+
+        // Setup additional pages
+        for (let tab_name of Object.keys(moduleDetails.additional_tab_files)) {
+            tabFactory.registerTab(new AdditionalTab(tab_name, `/v1/terrareg/modules/${moduleDetails.id}/files/${moduleDetails.additional_tab_files[tab_name]}`));
+        }
     }
 
     tabFactory.registerTab(new IntegrationsTab(moduleDetails));
@@ -1469,21 +2293,25 @@ async function setupRootModulePage(data) {
 
         tabFactory.registerTab(new OutputsTab(moduleDetails.root));
         tabFactory.registerTab(new ProvidersTab(moduleDetails.root));
-        tabFactory.registerTab(new ResourcesTab(moduleDetails.root));
+        tabFactory.registerTab(new ModulesTab(moduleDetails.root));
+        tabFactory.registerTab(new ResourcesTab(moduleDetails.root, moduleDetails.graph_url));
+        tabFactory.registerTab(new SecurityIssuesTab(moduleDetails));
         tabFactory.registerTab(new AnalyticsTab(moduleDetails));
         tabFactory.registerTab(new UsageBuilderTab(moduleDetails));
 
         showSecurityWarnings(moduleDetails);
+        showOutdatedExtractionDataWarning(moduleDetails);
         populateVersionSelect(moduleDetails);
         setupModuleVersionDeletionSetting(moduleDetails);
         populateSubmoduleSelect(moduleDetails);
         populateExampleSelect(moduleDetails);
-        populateTerraformUsageExample(moduleDetails);
+        populateTerraformUsageExample(moduleDetails, moduleDetails);
         populateDownloadSummary(moduleDetails);
         setSourceUrl(moduleDetails.display_source_url);
+        populateCustomLinks(moduleDetails);
     }
 
-    tabFactory.renderTabs();
+    await tabFactory.renderTabs();
     tabFactory.setDefaultTab();
 }
 
@@ -1499,6 +2327,8 @@ async function setupSubmodulePage(data) {
     let submodulePath = data.undefined;
     let submoduleDetails = await getSubmoduleDetails(moduleDetails.id, submodulePath);
 
+    createBreadcrumbs(data, submodulePath);
+
     setPageTitle(`${moduleDetails.module_provider_id}/${submoduleDetails.path}`);
 
     setModuleDescription(moduleDetails);
@@ -1506,7 +2336,7 @@ async function setupSubmodulePage(data) {
     setOwner(moduleDetails);
     populateCurrentSubmodule(`Submodule: ${submodulePath}`)
     populateVersionText(moduleDetails);
-    populateTerraformUsageExample(moduleDetails, submodulePath);
+    populateTerraformUsageExample(moduleDetails, submoduleDetails);
     enableBackToParentLink(moduleDetails);
     showSecurityWarnings(submoduleDetails);
     setSourceUrl(submoduleDetails.display_source_url);
@@ -1517,8 +2347,10 @@ async function setupSubmodulePage(data) {
     tabFactory.registerTab(new InputsTab(submoduleDetails));
     tabFactory.registerTab(new OutputsTab(submoduleDetails));
     tabFactory.registerTab(new ProvidersTab(submoduleDetails));
-    tabFactory.registerTab(new ResourcesTab(submoduleDetails));
-    tabFactory.renderTabs();
+    tabFactory.registerTab(new ModulesTab(submoduleDetails));
+    tabFactory.registerTab(new ResourcesTab(submoduleDetails, submoduleDetails.graph_url));
+    tabFactory.registerTab(new SecurityIssuesTab(submoduleDetails));
+    await tabFactory.renderTabs();
     tabFactory.setDefaultTab();
 }
 
@@ -1533,6 +2365,8 @@ async function setupExamplePage(data) {
 
     let examplePath = data.undefined;
     let submoduleDetails = await getExampleDetails(moduleDetails.id, examplePath);
+
+    createBreadcrumbs(data, examplePath);
 
     setPageTitle(`${moduleDetails.module_provider_id}/${submoduleDetails.path}`);
 
@@ -1550,21 +2384,34 @@ async function setupExamplePage(data) {
     tabFactory.registerTab(new InputsTab(submoduleDetails));
     tabFactory.registerTab(new OutputsTab(submoduleDetails));
     tabFactory.registerTab(new ProvidersTab(submoduleDetails));
-    tabFactory.registerTab(new ResourcesTab(submoduleDetails));
-    tabFactory.renderTabs();
+    tabFactory.registerTab(new ModulesTab(submoduleDetails));
+    tabFactory.registerTab(new ResourcesTab(submoduleDetails, submoduleDetails.graph_url));
+    tabFactory.registerTab(new SecurityIssuesTab(submoduleDetails));
+    await tabFactory.renderTabs();
     tabFactory.setDefaultTab();
 }
 
 
-function createBreadcrumbs(data) {
+async function createBreadcrumbs(data, subpath = undefined) {
+
+    let namespaceName = data.namespace;
+    let namespaceDetails = await getNamespaceDetails(namespaceName);
+    if (namespaceDetails.display_name) {
+        namespaceName = namespaceDetails.display_name;
+    }
+
     let breadcrumbs = [
         ["Modules", "modules"],
-        [data.namespace, data.namespace],
+        [namespaceName, data.namespace],
         [data.module, data.module],
         [data.provider, data.provider]
     ];
     if (data.version) {
         breadcrumbs.push([data.version, data.version]);
+    }
+
+    if (subpath !== undefined) {
+        breadcrumbs.push([subpath, subpath]);
     }
 
     let breadcrumbUl = $("#breadcrumb-ul");

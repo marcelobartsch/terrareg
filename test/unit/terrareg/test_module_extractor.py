@@ -1,17 +1,21 @@
 
+import os
+import shutil
 import subprocess
+import tempfile
 from unittest.main import MODULE_EXAMPLES
 import unittest.mock
 
 import pytest
-from terrareg.errors import GitCloneError
+
+import terrareg.errors
 
 from test.unit.terrareg import (
-    MockNamespace, MockModule, MockModuleProvider,
-    MockModuleVersion, TerraregUnitTest, setup_test_data
+    TerraregUnitTest, setup_test_data,
+    mock_models
 )
-from terrareg.models import Module, ModuleProvider, ModuleVersion, Namespace
-from terrareg.module_extractor import GitModuleExtractor
+from terrareg.module_extractor import GitModuleExtractor, ModuleExtractor
+import terrareg.models
 
 
 class TestGitModuleExtractor(TerraregUnitTest):
@@ -25,12 +29,12 @@ class TestGitModuleExtractor(TerraregUnitTest):
         ('complexgittagformat', 'ssh://localhost.com/moduleextraction/gitextraction-complexgittagformat', 'unittest4.3.2value')
     ])
     @setup_test_data()
-    def test__clone_repository(self, module_provider_name, expected_git_url, expected_git_tag):
+    def test__clone_repository(self, module_provider_name, expected_git_url, expected_git_tag, mock_models):
         """Test _clone_repository method"""
-        namespace = MockNamespace(name='moduleextraction')
-        module = MockModule(namespace=namespace, name='gitextraction')
-        module_provider = MockModuleProvider(module=module, name=module_provider_name)
-        module_version = MockModuleVersion(module_provider=module_provider, version='4.3.2')
+        namespace = terrareg.models.Namespace(name='moduleextraction')
+        module = terrareg.models.Module(namespace=namespace, name='gitextraction')
+        module_provider = terrareg.models.ModuleProvider(module=module, name=module_provider_name)
+        module_version = terrareg.models.ModuleVersion(module_provider=module_provider, version='4.3.2')
 
         check_call_mock = unittest.mock.MagicMock()
         module_extractor = GitModuleExtractor(module_version=module_version)
@@ -45,16 +49,17 @@ class TestGitModuleExtractor(TerraregUnitTest):
             expected_git_url,
             module_extractor.extract_directory],
             stderr=subprocess.STDOUT,
-            env=unittest.mock.ANY)
+            env=unittest.mock.ANY,
+            timeout=300)
         assert check_call_mock.call_args.kwargs['env']['GIT_SSH_COMMAND'] == 'ssh -o StrictHostKeyChecking=accept-new'
 
     @setup_test_data()
-    def test_known_git_error(self):
+    def test_known_git_error(self, mock_models):
         """Test error thrown by git with expected format of error."""
-        namespace = MockNamespace(name='moduleextraction')
-        module = MockModule(namespace=namespace, name='gitextraction')
-        module_provider = MockModuleProvider(module=module, name='staticrepourl')
-        module_version = MockModuleVersion(module_provider=module_provider, version='4.3.2')
+        namespace = terrareg.models.Namespace(name='moduleextraction')
+        module = terrareg.models.Module(namespace=namespace, name='gitextraction')
+        module_provider = terrareg.models.ModuleProvider(module=module, name='staticrepourl')
+        module_version = terrareg.models.ModuleVersion(module_provider=module_provider, version='4.3.2')
 
         module_extractor = GitModuleExtractor(module_version=module_version)
 
@@ -65,18 +70,18 @@ class TestGitModuleExtractor(TerraregUnitTest):
 
         with unittest.mock.patch('terrareg.module_extractor.subprocess.check_output', check_call_mock):
             with module_extractor as me:
-                with pytest.raises(GitCloneError) as error:
+                with pytest.raises(terrareg.errors.GitCloneError) as error:
                     me._clone_repository()
 
                 assert str(error.value) == 'Error occurred during git clone: fatal: unittest error here'
 
     @setup_test_data()
-    def test_unknown_git_error(self):
+    def test_unknown_git_error(self, mock_models):
         """Test error thrown by git with expected format of error."""
-        namespace = MockNamespace(name='moduleextraction')
-        module = MockModule(namespace=namespace, name='gitextraction')
-        module_provider = MockModuleProvider(module=module, name='staticrepourl')
-        module_version = MockModuleVersion(module_provider=module_provider, version='4.3.2')
+        namespace = terrareg.models.Namespace(name='moduleextraction')
+        module = terrareg.models.Module(namespace=namespace, name='gitextraction')
+        module_provider = terrareg.models.ModuleProvider(module=module, name='staticrepourl')
+        module_version = terrareg.models.ModuleVersion(module_provider=module_provider, version='4.3.2')
 
         module_extractor = GitModuleExtractor(module_version=module_version)
 
@@ -87,7 +92,7 @@ class TestGitModuleExtractor(TerraregUnitTest):
 
         with unittest.mock.patch('terrareg.module_extractor.subprocess.check_output', check_call_mock):
             with module_extractor as me:
-                with pytest.raises(GitCloneError) as error:
+                with pytest.raises(terrareg.errors.GitCloneError) as error:
                     me._clone_repository()
 
                 assert str(error.value) == 'Unknown error occurred during git clone'
@@ -133,12 +138,12 @@ class TestGitModuleExtractor(TerraregUnitTest):
         ('Terraform module designed to generate consistent helps and blanks for resources. Use this module to implement a test blank helps.\n\nThere are 6 inputs considered "helps" or "tests" (because the tests are used to construct the ID):',
         'Terraform module designed to generate consistent helps and blanks for resources')
     ])
-    def test_description_extraction(self, readme, expected_description):
+    def test_description_extraction(self, readme, expected_description, mock_models):
         """Test description extraction from README."""
         module_extractor = GitModuleExtractor(module_version=None)
         assert module_extractor._extract_description(readme) == expected_description
 
-    def test_description_extraction_when_disabled(self):
+    def test_description_extraction_when_disabled(self, mock_models):
         """Test that description extraction returns None when description extraction is disabled in the config"""
         test_text = "This is a perfectly valid description"
         module_extractor = GitModuleExtractor(module_version=None)
@@ -146,3 +151,276 @@ class TestGitModuleExtractor(TerraregUnitTest):
 
         with unittest.mock.patch('terrareg.config.Config.AUTOGENERATE_MODULE_PROVIDER_DESCRIPTION', False):
             assert module_extractor._extract_description(test_text) == None
+
+    def test_run_tf_init(self):
+        """Test running terraform init"""
+        with unittest.mock.patch('terrareg.module_extractor.subprocess.check_call', unittest.mock.MagicMock()) as check_output_mock, \
+                unittest.mock.patch("terrareg.module_extractor.ModuleExtractor._create_terraform_rc_file", unittest.mock.MagicMock()) as mock_create_terraform_rc_file:
+
+            module_extractor = GitModuleExtractor(module_version=None)
+
+            assert module_extractor._run_tf_init(module_path='/tmp/mock-patch/to/module') is True
+
+            check_output_mock.assert_called_once_with(
+                [os.path.join(os.getcwd(), 'bin', 'terraform'), 'init'],
+                cwd='/tmp/mock-patch/to/module'
+            )
+            mock_create_terraform_rc_file.assert_called_once_with()
+
+    def test_run_tf_init_error(self):
+        """Test running terraform init with error returned"""
+
+        def raise_exception(*args, **kwargs):
+            raise subprocess.CalledProcessError(cmd="test", returncode=2)
+
+        with unittest.mock.patch('terrareg.module_extractor.subprocess.check_call', unittest.mock.MagicMock(side_effect=raise_exception)) as mock_check_call, \
+                unittest.mock.patch("terrareg.module_extractor.ModuleExtractor._create_terraform_rc_file", unittest.mock.MagicMock()) as mock_create_terraform_rc_file:
+
+            module_extractor = GitModuleExtractor(module_version=None)
+
+            assert module_extractor._run_tf_init(module_path='/tmp/mock-patch/to/module') is False
+
+            mock_check_call.assert_called_once_with(
+                [os.path.join(os.getcwd(), 'bin', 'terraform'), 'init'],
+                cwd='/tmp/mock-patch/to/module'
+            )
+            mock_create_terraform_rc_file.assert_called_once_with()
+
+    @pytest.mark.parametrize('file_contents,expected_backend_file', [
+        (
+            {
+                "state.tf": """
+terraform {
+  backend "s3" {
+    bucket  = "does-not-exist"
+    key     = "path/to/my/key"
+    region  = "us-east-1"
+    profile = "thisdoesnotexistforterrareg"
+  }
+}
+"""
+            },
+            "state_override.tf"
+        ),
+        (
+            {
+                # Files named B, S, V, so that the backend is stored in
+                # a file that will not be found first by glob
+                "bucket.tf": """
+resource "aws_s3_bucket" "test_bucket" {
+  name = var.name
+}
+""",
+                # More complex terraform block, with comment and required providers
+                "state.tf": """
+# With content before the terraform block
+terraform {
+  # Multiple terraform backend configurations
+  required_providers {
+    aws = {
+      version = ">= 2.7.0"
+      source = "hashicorp/aws"
+    }
+  }
+
+  backend "s3" {
+    bucket  = "does-not-exist"
+    key     = "path/to/my/key"
+    region  = "us-east-1"
+    profile = "thisdoesnotexistforterrareg"
+  }
+}
+""",
+                "variables.tf": """
+variable "name" {
+  description = "Bucket name"
+  type        = string
+}
+"""
+            },
+            "state_override.tf"
+        ),
+        # Without backend config
+        (
+            {
+                # Files named B, S, V, so that the backend is stored in
+                # a file that will not be found first by glob
+                "bucket.tf": """
+resource "aws_s3_bucket" "test_bucket" {
+  name = var.name
+}
+""",
+                "variables.tf": """
+variable "name" {
+  description = "Bucket name"
+  type        = string
+}
+"""
+            },
+            None
+        )
+    ])
+    def test_override_tf_backend(self, file_contents, expected_backend_file):
+        """Test _override_tf_backend method with backend in terraform files"""
+        temp_dir = tempfile.mkdtemp()
+        try:
+            for file_name in file_contents:
+                with open(os.path.join(temp_dir, file_name), "w") as fh:
+                    fh.write(file_contents[file_name])
+
+            module_extractor = GitModuleExtractor(module_version=None)
+            backend_file = module_extractor._override_tf_backend(module_path=temp_dir)
+
+            if not expected_backend_file:
+                assert backend_file is None
+
+            else:
+                assert backend_file == f"{temp_dir}/{expected_backend_file}"
+
+                with open(backend_file, "r") as backend_fh:
+                    assert backend_fh.read().strip() == """
+terraform {
+  backend "local" {
+    path = "./.local-state"
+  }
+}
+""".strip()
+        finally:
+            if temp_dir:
+                shutil.rmtree(temp_dir)
+
+
+    def test_switch_terraform_versions(self):
+        """Test switching terraform versions."""
+        module_extractor = GitModuleExtractor(module_version=None)
+        mock_lock = unittest.mock.MagicMock()
+        mock_lock.acquire.return_value = True
+
+        with unittest.mock.patch('terrareg.module_extractor.ModuleExtractor.TERRAFORM_LOCK', mock_lock), \
+                unittest.mock.patch('terrareg.module_extractor.subprocess.check_output', unittest.mock.MagicMock()) as check_output_mock, \
+                unittest.mock.patch('terrareg.config.Config.DEFAULT_TERRAFORM_VERSION', 'unittest-tf-version'), \
+                unittest.mock.patch('terrareg.config.Config.TERRAFORM_ARCHIVE_MIRROR', 'https://localhost-archive/mirror/terraform'):
+
+            with module_extractor._switch_terraform_versions(module_path='/tmp/mock-patch/to/module'):
+                pass
+
+            mock_lock.acquire.assert_called_once_with(blocking=True, timeout=60)
+            expected_env = os.environ.copy()
+            expected_env['TF_VERSION'] = "unittest-tf-version"
+            check_output_mock.assert_called_once_with(
+                ["tfswitch", "--mirror", "https://localhost-archive/mirror/terraform", "--bin", f"{os.getcwd()}/bin/terraform"],
+                env=expected_env,
+                cwd="/tmp/mock-patch/to/module"
+            )
+
+    def test_switch_terraform_versions_error(self):
+        """Test running switch_terraform_version with erorr in tfswitch"""
+        module_extractor = GitModuleExtractor(module_version=None)
+        mock_lock = unittest.mock.MagicMock()
+        mock_lock.acquire.return_value = True
+        def raise_exception(*args, **kwargs):
+            raise subprocess.CalledProcessError(cmd="test", returncode=2)
+
+        with unittest.mock.patch('terrareg.module_extractor.ModuleExtractor.TERRAFORM_LOCK', mock_lock), \
+                unittest.mock.patch('terrareg.module_extractor.subprocess.check_output', unittest.mock.MagicMock(side_effect=raise_exception)) as check_output_mock, \
+                unittest.mock.patch('terrareg.config.Config.DEFAULT_TERRAFORM_VERSION', 'unittest-tf-version'):
+
+            with pytest.raises(terrareg.errors.TerraformVersionSwitchError):
+                with module_extractor._switch_terraform_versions(module_path='/tmp/mock-patch/to/module'):
+                    pass
+
+    def test_switch_terraform_versions_with_lock(self):
+        """Test switching terraform versions whilst Terraform locked is already aquired."""
+        module_extractor = GitModuleExtractor(module_version=None)
+        mock_lock = unittest.mock.MagicMock()
+        mock_lock.acquire.return_value = False
+
+        with unittest.mock.patch('terrareg.module_extractor.ModuleExtractor.TERRAFORM_LOCK', mock_lock), \
+                unittest.mock.patch('terrareg.module_extractor.subprocess.check_output', unittest.mock.MagicMock()) as check_output_mock:
+            
+            with pytest.raises(terrareg.errors.UnableToGetGlobalTerraformLockError):
+                with module_extractor._switch_terraform_versions(module_path='test'):
+                    pass
+
+            mock_lock.acquire.assert_called_once_with(blocking=True, timeout=60)
+            check_output_mock.assert_not_called()
+
+    def test_get_graph_data(self):
+        """Test call to terraform graph to generate graph output"""
+        module_extractor = GitModuleExtractor(module_version=None)
+
+        with unittest.mock.patch('terrareg.module_extractor.subprocess.check_output',
+                                 unittest.mock.MagicMock(return_value="Output graph data".encode("utf-8"))) as mock_check_output:
+
+            module_extractor._get_graph_data(module_path='/tmp/mock-patch/to/module')
+
+            mock_check_output.assert_called_once_with(
+                [os.getcwd() + '/bin/terraform', 'graph'],
+                cwd='/tmp/mock-patch/to/module'
+            )
+
+    def test_get_graph_data_terraform_error(self):
+        """Test call to terraform graph with error thrown"""
+        module_extractor = GitModuleExtractor(module_version=None)
+
+        def raise_error(*args, **kwargs):
+            raise subprocess.CalledProcessError(cmd="the command", returncode=2, output=b"")
+
+        with unittest.mock.patch('terrareg.module_extractor.subprocess.check_output',
+                                 unittest.mock.MagicMock(side_effect=raise_error)) as mock_check_output:
+
+            assert module_extractor._get_graph_data(module_path='/tmp/mock-patch/to/module') is None
+
+            mock_check_output.assert_called_once_with(
+                [os.getcwd() + '/bin/terraform', 'graph'],
+                cwd='/tmp/mock-patch/to/module'
+            )
+
+    @pytest.mark.parametrize("public_url,manage_terraform_rc_file,should_create_file,should_contain_credentials_block", [
+        ("", False, False, False),
+        ("", True, True, False),
+        ("https://unittest-example-domain.com", False, False, False),
+        ("https://unittest-example-domain.com", True, True, True)
+    ])
+    def test_create_terraform_rc_file(self, public_url, manage_terraform_rc_file, should_create_file, should_contain_credentials_block):
+        """Test terraform RC file"""
+        # Create temporary file and remove
+        temp_file = tempfile.mktemp()
+        # os.unlink(temp_file)
+
+        with unittest.mock.patch("terrareg.module_extractor.ModuleExtractor.terraform_rc_file", temp_file), \
+                unittest.mock.patch("os.makedirs") as mock_makedirs, \
+                unittest.mock.patch("terrareg.config.Config.MANAGE_TERRAFORM_RC_FILE", manage_terraform_rc_file), \
+                unittest.mock.patch("terrareg.config.Config.PUBLIC_URL", public_url):
+
+            module_extractor = GitModuleExtractor(module_version=None)
+            module_extractor._create_terraform_rc_file()
+
+            if should_create_file:
+                assert os.path.isfile(temp_file)
+
+                mock_makedirs.assert_called_once_with(f"{os.path.expanduser('~')}/.terraform.d/plugin-cache", exist_ok=True)
+
+                with open(temp_file, "r") as temp_file_fh:
+                    if should_contain_credentials_block:
+                        assert "".join(temp_file_fh.readlines()) == f"""
+# Cache plugins
+plugin_cache_dir   = "$HOME/.terraform.d/plugin-cache"
+disable_checkpoint = true
+
+
+credentials "unittest-example-domain.com" {{
+  token = "internal-terrareg-analytics-token"
+}}
+"""
+
+                    else:
+                        assert "".join(temp_file_fh.readlines()) == f"""
+# Cache plugins
+plugin_cache_dir   = "$HOME/.terraform.d/plugin-cache"
+disable_checkpoint = true
+
+"""
+
+            else:
+                assert not os.path.isfile(temp_file)

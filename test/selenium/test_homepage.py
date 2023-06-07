@@ -23,6 +23,10 @@ class TestHomepage(SeleniumTest):
         cls.register_patch(mock.patch('terrareg.config.Config.TRUSTED_NAMESPACES', ['trustednamespace']))
         super(TestHomepage, cls).setup_class()
 
+    def test_setup_selenium_data(self):
+        """Fake test doing nothing, to allow selenium test data to be imported"""
+        pass
+
     def test_title(self):
         """Check homepage."""
         self.selenium_instance.get(self.get_url('/'))
@@ -30,12 +34,12 @@ class TestHomepage(SeleniumTest):
         # Ensure title is injected correctly
         assert self.selenium_instance.find_element(By.ID, 'title').text == 'unittest application name'
 
-        assert self.selenium_instance.title == 'Home - Terrareg'
+        assert self.selenium_instance.title == 'Home - unittest application name'
 
     @pytest.mark.parametrize('element,count', [
-        ('namespace', 15),
-        ('module', 47),
-        ('version', 74),
+        ('namespace', 21),
+        ('module', 68),
+        ('version', 98),
         ('download', 2005)
     ])
     def test_counts(self, element, count):

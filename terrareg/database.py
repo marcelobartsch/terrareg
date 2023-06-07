@@ -5,9 +5,11 @@ import sqlalchemy.dialects.mysql
 
 from flask import has_request_context
 import flask
+from terrareg.audit_action import AuditAction
 
 import terrareg.config
 from terrareg.errors import DatabaseMustBeIniistalisedError
+from terrareg.user_group_namespace_permission_type import UserGroupNamespacePermissionType
 
 
 class Database():
@@ -44,14 +46,18 @@ class Database():
 
     def __init__(self):
         """Setup member variables."""
+        self._session = None
+        self._user_group = None
+        self._user_group_namespace_permission = None
         self._git_provider = None
+        self._namespace = None
         self._module_provider = None
         self._module_details = None
         self._module_version = None
         self._sub_module = None
         self._analytics = None
         self._example_file = None
-        self._session = None
+        self._module_version_file = None
         self.transaction_connection = None
 
     @property
@@ -62,11 +68,32 @@ class Database():
         return self._session
 
     @property
+    def user_group(self):
+        """Return namespace table."""
+        if self._user_group is None:
+            raise DatabaseMustBeIniistalisedError('Database class must be initialised.')
+        return self._user_group
+
+    @property
+    def user_group_namespace_permission(self):
+        """Return namespace table."""
+        if self._user_group_namespace_permission is None:
+            raise DatabaseMustBeIniistalisedError('Database class must be initialised.')
+        return self._user_group_namespace_permission
+
+    @property
     def git_provider(self):
         """Return git_provider table."""
         if self._git_provider is None:
             raise DatabaseMustBeIniistalisedError('Database class must be initialised.')
         return self._git_provider
+
+    @property
+    def namespace(self):
+        """Return namespace table."""
+        if self._namespace is None:
+            raise DatabaseMustBeIniistalisedError('Database class must be initialised.')
+        return self._namespace
 
     @property
     def module_provider(self):
@@ -109,6 +136,20 @@ class Database():
         if self._example_file is None:
             raise DatabaseMustBeIniistalisedError('Database class must be initialised.')
         return self._example_file
+
+    @property
+    def module_version_file(self):
+        """Return analytics table."""
+        if self._module_version_file is None:
+            raise DatabaseMustBeIniistalisedError('Database class must be initialised.')
+        return self._module_version_file
+
+    @property
+    def audit_history(self):
+        """Audit history table."""
+        if self._audit_history is None:
+            raise DatabaseMustBeIniistalisedError('Database class must be initialised.')
+        return self._audit_history
 
     @classmethod
     def reset(cls):
@@ -158,6 +199,38 @@ class Database():
             sqlalchemy.Column('expiry', sqlalchemy.DateTime, nullable=False)
         )
 
+        self._user_group = sqlalchemy.Table(
+            'user_group', meta,
+            sqlalchemy.Column('id', sqlalchemy.Integer, primary_key=True),
+            sqlalchemy.Column('name', sqlalchemy.String(GENERAL_COLUMN_SIZE), nullable=False, unique=True),
+            sqlalchemy.Column('site_admin', sqlalchemy.Boolean, default=False, nullable=False)
+        )
+
+        self._user_group_namespace_permission = sqlalchemy.Table(
+            'user_group_namespace_permission', meta,
+            sqlalchemy.Column(
+                'user_group_id',
+                sqlalchemy.ForeignKey(
+                    'user_group.id',
+                    name='fk_user_group_namespace_permission_user_group_id_user_group_id',
+                    onupdate='CASCADE',
+                    ondelete='CASCADE'),
+                nullable=False,
+                primary_key=True
+            ),
+            sqlalchemy.Column(
+                'namespace_id',
+                sqlalchemy.ForeignKey(
+                    'namespace.id',
+                    name='fk_user_group_namespace_permission_namespace_id_namespace_id',
+                    onupdate='CASCADE',
+                    ondelete='CASCADE'),
+                nullable=False,
+                primary_key=True
+            ),
+            sqlalchemy.Column('permission_type', sqlalchemy.Enum(UserGroupNamespacePermissionType))
+        )
+
         self._git_provider = sqlalchemy.Table(
             'git_provider', meta,
             sqlalchemy.Column('id', sqlalchemy.Integer, primary_key = True),
@@ -167,10 +240,25 @@ class Database():
             sqlalchemy.Column('browse_url_template', sqlalchemy.String(URL_COLUMN_SIZE))
         )
 
+        self._namespace = sqlalchemy.Table(
+            'namespace', meta,
+            sqlalchemy.Column('id', sqlalchemy.Integer, primary_key=True),
+            sqlalchemy.Column('namespace', sqlalchemy.String(GENERAL_COLUMN_SIZE), nullable=False),
+            sqlalchemy.Column('display_name', sqlalchemy.String(GENERAL_COLUMN_SIZE))
+        )
+
         self._module_provider = sqlalchemy.Table(
             'module_provider', meta,
             sqlalchemy.Column('id', sqlalchemy.Integer, primary_key = True),
-            sqlalchemy.Column('namespace', sqlalchemy.String(GENERAL_COLUMN_SIZE)),
+            sqlalchemy.Column(
+                'namespace_id',
+                sqlalchemy.ForeignKey(
+                    'namespace.id',
+                    name='fk_module_provider_namespace_id_namespace_id',
+                    onupdate='CASCADE',
+                    ondelete='CASCADE'),
+                nullable=False
+            ),
             sqlalchemy.Column('module', sqlalchemy.String(GENERAL_COLUMN_SIZE)),
             sqlalchemy.Column('provider', sqlalchemy.String(GENERAL_COLUMN_SIZE)),
             sqlalchemy.Column('repo_base_url_template', sqlalchemy.String(URL_COLUMN_SIZE)),
@@ -207,7 +295,8 @@ class Database():
             sqlalchemy.Column('readme_content', Database.medium_blob()),
             sqlalchemy.Column('terraform_docs', Database.medium_blob()),
             sqlalchemy.Column('tfsec', Database.medium_blob()),
-            sqlalchemy.Column('infracost', Database.medium_blob())
+            sqlalchemy.Column('infracost', Database.medium_blob()),
+            sqlalchemy.Column('terraform_graph', Database.medium_blob())
         )
 
         self._module_version = sqlalchemy.Table(
@@ -243,7 +332,8 @@ class Database():
             sqlalchemy.Column('published_at', sqlalchemy.DateTime),
             sqlalchemy.Column('variable_template', Database.medium_blob()),
             sqlalchemy.Column('internal', sqlalchemy.Boolean, nullable=False),
-            sqlalchemy.Column('published', sqlalchemy.Boolean)
+            sqlalchemy.Column('published', sqlalchemy.Boolean),
+            sqlalchemy.Column('extraction_version', sqlalchemy.Integer)
         )
 
         self._sub_module = sqlalchemy.Table(
@@ -300,12 +390,43 @@ class Database():
             sqlalchemy.Column('content', Database.medium_blob())
         )
 
+        # Additional files for module provider (e.g. additional README files)
+        self._module_version_file = sqlalchemy.Table(
+            'module_version_file', meta,
+            sqlalchemy.Column('id', sqlalchemy.Integer, primary_key=True),
+            sqlalchemy.Column(
+                'module_version_id',
+                sqlalchemy.ForeignKey(
+                    'module_version.id',
+                    name='fk_module_version_file_module_version_id_module_version_id',
+                    onupdate='CASCADE',
+                    ondelete='CASCADE'),
+                nullable=False
+            ),
+            sqlalchemy.Column('path', sqlalchemy.String(GENERAL_COLUMN_SIZE), nullable=False),
+            sqlalchemy.Column('content', Database.medium_blob())
+        )
+
+        self._audit_history = sqlalchemy.Table(
+            'audit_history', meta,
+            sqlalchemy.Column('id', sqlalchemy.Integer, primary_key=True),
+            sqlalchemy.Column('timestamp', sqlalchemy.DateTime),
+            sqlalchemy.Column('username', sqlalchemy.String(GENERAL_COLUMN_SIZE)),
+            sqlalchemy.Column('action', sqlalchemy.Enum(AuditAction)),
+            sqlalchemy.Column('object_type', sqlalchemy.String(GENERAL_COLUMN_SIZE)),
+            sqlalchemy.Column('object_id', sqlalchemy.String(GENERAL_COLUMN_SIZE)),
+            sqlalchemy.Column('old_value', sqlalchemy.String(GENERAL_COLUMN_SIZE)),
+            sqlalchemy.Column('new_value', sqlalchemy.String(GENERAL_COLUMN_SIZE))
+        )
+
     def select_module_version_joined_module_provider(self, *select_args):
         """Perform select on module_version, joined to module_provider table."""
         return sqlalchemy.select(
             *select_args
         ).select_from(self.module_version).join(
-            self.module_provider, self.module_version.c.module_provider_id == self.module_provider.c.id
+            self.module_provider, self.module_version.c.module_provider_id==self.module_provider.c.id
+        ).join(
+            self.namespace, self.module_provider.c.namespace_id==self.namespace.c.id
         )
 
     def select_module_provider_joined_latest_module_version(self, *select_args):
@@ -313,7 +434,9 @@ class Database():
         return sqlalchemy.select(
             *select_args
         ).select_from(self.module_provider).join(
-            self.module_version, self.module_provider.c.latest_version_id == self.module_version.c.id
+            self.module_version, self.module_provider.c.latest_version_id==self.module_version.c.id
+        ).join(
+            self.namespace, self.module_provider.c.namespace_id==self.namespace.c.id
         )
 
     @classmethod

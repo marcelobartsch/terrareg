@@ -4,6 +4,7 @@ import unittest.mock
 import pytest
 import sqlalchemy
 from terrareg.analytics import AnalyticsEngine
+from terrareg.config import ModuleVersionReindexMode
 from terrareg.database import Database
 
 from terrareg.models import Example, ExampleFile, Module, Namespace, ModuleProvider, ModuleVersion
@@ -52,7 +53,7 @@ class TestModuleVersion(TerraregIntegrationTest):
 
     def test_create_db_row(self):
         """Test creating DB row"""
-        namespace = Namespace(name='testcreation')
+        namespace = Namespace.get(name='testcreation', create=True)
         module = Module(namespace=namespace, name='test-module')
         module_provider = ModuleProvider.get(module=module, name='testprovider', create=True)
         module_provider_row = module_provider._get_db_row()
@@ -83,7 +84,7 @@ class TestModuleVersion(TerraregIntegrationTest):
 
     def test_create_beta_version(self):
         """Test creating DB row for beta version"""
-        namespace = Namespace(name='testcreation')
+        namespace = Namespace.get(name='testcreation', create=True)
         module = Module(namespace=namespace, name='test-module')
         module_provider = ModuleProvider.get(module=module, name='testprovider', create=True)
         module_provider_row = module_provider._get_db_row()
@@ -112,146 +113,204 @@ class TestModuleVersion(TerraregIntegrationTest):
                      'variable_template']:
             assert new_db_row[attr] == None
 
-    def test_create_db_row_replace_existing(self):
+    @pytest.mark.parametrize('module_version_reindex_mode,previous_publish_state,expected_return_value,should_raise_error', [
+        # Legacy mode should allow the re-index and ignore pre-existing version for setting published
+        (ModuleVersionReindexMode.LEGACY, False, False, False),
+        ## With previous version published
+        (ModuleVersionReindexMode.LEGACY, True, False, False),
+
+        # Auto-publish mode should return the previously indexed module's published state
+        (ModuleVersionReindexMode.AUTO_PUBLISH, False, False, False),
+        (ModuleVersionReindexMode.AUTO_PUBLISH, True, True, False),
+
+        # Prohibit mode should raise an error
+        (ModuleVersionReindexMode.PROHIBIT, False, False, True)
+    ])
+    def test_create_db_row_replace_existing(self, module_version_reindex_mode,
+                                            previous_publish_state, expected_return_value,
+                                            should_raise_error):
         """Test creating DB row with pre-existing module version"""
 
         db = Database.get()
 
-        with db.get_engine().connect() as conn:
-            conn.execute(db.module_provider.insert().values(
-                id=10000,
-                namespace='testcreation',
-                module='test-module',
-                provider='testprovider'
-            ))
+        try:
+            with db.get_engine().connect() as conn:
+                conn.execute(db.namespace.insert().values(
+                    id=9999,
+                    namespace='testcreationunique'
+                ))
 
-            conn.execute(db.module_version.insert().values(
-                id=10001,
-                module_provider_id=10000,
-                version='1.1.0',
-                published=True,
-                beta=False,
-                internal=False
-            ))
+                conn.execute(db.module_provider.insert().values(
+                    id=10000,
+                    namespace_id=9999,
+                    module='test-module',
+                    provider='testprovider'
+                ))
 
-            # Create submodules
-            conn.execute(db.sub_module.insert().values(
-                id=10002,
-                parent_module_version=10001,
-                type='example',
-                path='example/test-modal-db-row-create-here'
-            ))
-            conn.execute(db.sub_module.insert().values(
-                id=10003,
-                parent_module_version=10001,
-                type='submodule',
-                path='modules/test-modal-db-row-create-there'
-            ))
+                conn.execute(db.module_version.insert().values(
+                    id=10001,
+                    module_provider_id=10000,
+                    version='1.1.0',
+                    published=previous_publish_state,
+                    beta=False,
+                    internal=False
+                ))
 
-            # Create example file
-            conn.execute(db.example_file.insert().values(
-                id=10004,
-                submodule_id=10002,
-                path='testfile.tf',
-                content=None
-            ))
+                # Create submodules
+                conn.execute(db.sub_module.insert().values(
+                    id=10002,
+                    parent_module_version=10001,
+                    type='example',
+                    path='example/test-modal-db-row-create-here'
+                ))
+                conn.execute(db.sub_module.insert().values(
+                    id=10003,
+                    parent_module_version=10001,
+                    type='submodule',
+                    path='modules/test-modal-db-row-create-there'
+                ))
 
-            # Create download analytics
-            conn.execute(db.analytics.insert().values(
-                id=10005,
-                parent_module_version=10001,
-                timestamp=datetime.now(),
-                terraform_version='1.0.0',
-                analytics_token='unittest-download',
-                auth_token='abcefg',
-                environment='test'
-            ))
+                # Create example file
+                conn.execute(db.example_file.insert().values(
+                    id=10004,
+                    submodule_id=10002,
+                    path='testfile.tf',
+                    content=None
+                ))
 
-        namespace = Namespace(name='testcreation')
-        module = Module(namespace=namespace, name='test-module')
-        module_provider = ModuleProvider.get(module=module, name='testprovider')
-        module_provider_row = module_provider._get_db_row()
+                # Create download analytics
+                conn.execute(db.analytics.insert().values(
+                    id=10005,
+                    parent_module_version=10001,
+                    timestamp=datetime.now(),
+                    terraform_version='1.0.0',
+                    analytics_token='unittest-download',
+                    auth_token='abcefg',
+                    environment='test'
+                ))
 
-        module_version = ModuleVersion(module_provider=module_provider, version='1.1.0')
+            namespace = Namespace.get(name='testcreationunique')
+            assert namespace is not None
+            module = Module(namespace=namespace, name='test-module')
+            module_provider = ModuleProvider.get(module=module, name='testprovider')
+            assert module_provider is not None
+            module_provider_row = module_provider._get_db_row()
 
-        # Ensure that pre-existing row is returned
-        pre_existing_row = module_version._get_db_row()
-        assert pre_existing_row is not None
-        assert pre_existing_row['id'] == 10001
+            module_version = ModuleVersion(module_provider=module_provider, version='1.1.0')
 
-        # Insert module version into database
-        module_version._create_db_row()
+            # Ensure that pre-existing row is returned
+            pre_existing_row = module_version._get_db_row()
+            assert pre_existing_row is not None
+            assert pre_existing_row['id'] == 10001
 
-        # Ensure that a DB row is now returned
-        new_db_row = module_version._get_db_row()
-        assert new_db_row['module_provider_id'] == module_provider_row['id']
-        assert type(new_db_row['id']) == int
+            with unittest.mock.patch('terrareg.config.Config.MODULE_VERSION_REINDEX_MODE', module_version_reindex_mode):
+                # If confiugred to raise an error, check that it is
+                if should_raise_error:
+                    with pytest.raises(terrareg.errors.ReindexingExistingModuleVersionsIsProhibitedError):
+                        module_version._create_db_row()
 
-        assert new_db_row['published'] == False
-        assert new_db_row['version'] == '1.1.0'
+                    # Do not run any further tests as the exception will
+                    # rollback any changes
+                    return
+                else:
+                    # Otherwise check the return value
+                    publish_flag = module_version._create_db_row()
+                    assert publish_flag == expected_return_value
 
-        for attr in ['description', 'module_details_id', 'owner',
-                     'published_at', 'repo_base_url_template',
-                     'repo_browse_url_template', 'repo_clone_url_template',
-                     'variable_template']:
-            assert new_db_row[attr] == None
+            # Ensure that a DB row is now returned
+            new_db_row = module_version._get_db_row()
+            assert new_db_row['module_provider_id'] == module_provider_row['id']
+            assert type(new_db_row['id']) == int
 
-        # Ensure that all moduleversion, submodules and example files have been removed
-        with db.get_engine().connect() as conn:
-            mv_res = conn.execute(db.module_version.select(
-                db.module_version.c.id == 10001
-            ))
-            assert [r for r in mv_res] == []
+            assert new_db_row['published'] == False
+            assert new_db_row['version'] == '1.1.0'
 
-            # Check for any submodules with the original IDs
-            # or with the previous module ID or with the example
-            # paths
-            sub_module_res = conn.execute(db.sub_module.select().where(
-                sqlalchemy.or_(
-                    db.sub_module.c.id.in_((10002, 10003)),
-                    db.sub_module.c.parent_module_version == 10001,
-                    db.sub_module.c.path.in_(('example/test-modal-db-row-create-here',
-                                              'modules/test-modal-db-row-create-there'))
-                )
-            ))
-            assert [r for r in sub_module_res] == []
+            for attr in ['description', 'module_details_id', 'owner',
+                        'published_at', 'repo_base_url_template',
+                        'repo_browse_url_template', 'repo_clone_url_template',
+                        'variable_template']:
+                assert new_db_row[attr] == None
 
-            # Ensure example files have been removed
-            example_file_res = conn.execute(db.example_file.select().where(
-                db.example_file.c.id == 10004
-            ))
-            assert [r for r in example_file_res] == []
+            # Ensure that all moduleversion, submodules and example files have been removed
+            with db.get_engine().connect() as conn:
+                mv_res = conn.execute(db.module_version.select(
+                    db.module_version.c.id == 10001
+                ))
+                assert [r for r in mv_res] == []
 
-            # Ensure analytics are retained
-            analytics_res = conn.execute(db.analytics.select().where(
-                db.analytics.c.id==10005
-            ))
-            analytics_res = list(analytics_res)
-            assert len(analytics_res) == 1
-            assert analytics_res[0]['id'] == 10005
-            # Assert that analytics row has been updated to new module version ID
-            assert analytics_res[0]['parent_module_version'] == new_db_row['id']
-            assert analytics_res[0]['environment'] == 'test'
+                # Check for any submodules with the original IDs
+                # or with the previous module ID or with the example
+                # paths
+                sub_module_res = conn.execute(db.sub_module.select().where(
+                    sqlalchemy.or_(
+                        db.sub_module.c.id.in_((10002, 10003)),
+                        db.sub_module.c.parent_module_version == 10001,
+                        db.sub_module.c.path.in_(('example/test-modal-db-row-create-here',
+                                                'modules/test-modal-db-row-create-there'))
+                    )
+                ))
+                assert [r for r in sub_module_res] == []
+
+                # Ensure example files have been removed
+                example_file_res = conn.execute(db.example_file.select().where(
+                    db.example_file.c.id == 10004
+                ))
+                assert [r for r in example_file_res] == []
+
+                # Ensure analytics are retained
+                analytics_res = conn.execute(db.analytics.select().where(
+                    db.analytics.c.id==10005
+                ))
+                analytics_res = list(analytics_res)
+                assert len(analytics_res) == 1
+                assert analytics_res[0]['id'] == 10005
+                # Assert that analytics row has been updated to new module version ID
+                assert analytics_res[0]['parent_module_version'] == new_db_row['id']
+                assert analytics_res[0]['environment'] == 'test'
+
+                # Ensure namespace still exists
+                namespace = Namespace.get('testcreationunique')
+                assert namespace is not None
+                assert namespace.pk == 9999
+        finally:
+            # Clear down test data
+            ns = Namespace.get('testcreationunique')
+            if ns:
+                module = Module(ns, 'test-module')
+                module_provider = ModuleProvider.get(module, 'testprovider')
+                if module_provider:
+                    module_provider.delete()
+                with db.get_engine().connect() as conn:
+                    conn.execute(db.namespace.delete().where(
+                        db.namespace.c.id==9999
+                    ))
 
 
-    @pytest.mark.parametrize('template,version,expected_string', [
-        ('= {major}.{minor}.{patch}', '1.5.0', '= 1.5.0'),
-        ('<= {major_plus_one}.{minor_plus_one}.{patch_plus_one}', '1.5.0', '<= 2.6.1'),
-        ('>= {major_minus_one}.{minor_minus_one}.{patch_minus_one}', '4.3.2', '>= 3.2.1'),
-        ('>= {major_minus_one}.{minor_minus_one}.{patch_minus_one}', '0.0.0', '>= 0.0.0'),
-        ('< {major_plus_one}.0.0', '10584.321.564', '< 10585.0.0'),
+    @pytest.mark.parametrize('template,version,published,expected_string', [
+        ('>= {major_minus_one}.{minor_minus_one}.{patch_minus_one}', '0.0.0', True, '>= 0.0.0'),
+        ('= {major}.{minor}.{patch}', '1.5.0', True, '= 1.5.0'),
+        ('<= {major_plus_one}.{minor_plus_one}.{patch_plus_one}', '1.5.0', True, '<= 2.6.1'),
+        ('>= {major_minus_one}.{minor_minus_one}.{patch_minus_one}', '4.3.2', True, '>= 3.2.1'),
+        ('< {major_plus_one}.0.0', '10584.321.564', True, '< 10585.0.0'),
+        # Test older version to ensure it is shown as specific version
+        ('>= {major_minus_one}.{minor_minus_one}.{patch_minus_one}', '0.0.1', True, '0.0.1'),
         # Test that beta version returns the version and
         # ignores the version template
-        ('>= {major_minus_one}.{minor_minus_one}.{patch_minus_one}', '5.6.23-beta', '5.6.23-beta')
+        ('>= {major_minus_one}.{minor_minus_one}.{patch_minus_one}', '5.6.23-beta', False, '5.6.23-beta'),
+        ('>= {major_minus_one}.{minor_minus_one}.{patch_minus_one}', '5.6.24-beta', True, '5.6.24-beta'),
+        # Non-published version
+        ('>= {major_minus_one}.{minor_minus_one}.{patch_minus_one}', '5.6.25', False, '5.6.25'),
     ])
-    def test_get_terraform_example_version_string(self, template, version, expected_string):
+    def test_get_terraform_example_version_string(self, template, version, published, expected_string):
         """Test get_terraform_example_version_string method"""
         with unittest.mock.patch('terrareg.config.Config.TERRAFORM_EXAMPLE_VERSION_TEMPLATE', template):
-            namespace = Namespace(name='test')
+            namespace = Namespace.get(name='test', create=True)
             module = Module(namespace=namespace, name='test')
             module_provider = ModuleProvider.get(module=module, name='test', create=True)
             module_version = ModuleVersion(module_provider=module_provider, version=version)
             module_version.prepare_module()
+            if published:
+                module_version.publish()
             assert module_version.get_terraform_example_version_string() == expected_string
 
     def test_delete(self):
@@ -344,41 +403,68 @@ class TestModuleVersion(TerraregIntegrationTest):
                     'additional_help': 'Provide the name of the application',
                     'name': 'name_of_application',
                     'quote_value': True,
-                    'type': 'text'
+                    'type': 'text',
+                    'default_value': None,
+                    'required': True
                 }
             ]
 
         # Ensure when autogenerated usage builder is enabled, the missing required variables
         # are populated in the variable template
         with unittest.mock.patch('terrareg.config.Config.AUTOGENERATE_USAGE_BUILDER_VARIABLES', True):
-            assert module_version.variable_template == [
+            assert module_version.variable_template ==  [
                 {
                     'additional_help': 'Provide the name of the application',
                     'name': 'name_of_application',
                     'quote_value': True,
+                    'type': 'text',
+                    'default_value': None,
+                    'required': True
+                },
+                {
+                    'additional_help': 'Override the default string',
+                    'default_value': 'this is the default',
+                    'name': 'string_with_default_value',
+                    'quote_value': True,
+                    'required': False,
                     'type': 'text'
                 },
                 {
                     'additional_help': 'Override the default string',
+                    'default_value': None,
                     'name': 'undocumented_required_variable',
                     'quote_value': True,
+                    'required': True,
                     'type': 'text'
                 },
                 {
                     'additional_help': 'required boolean variable',
+                    'default_value': None,
                     'name': 'example_boolean_input',
-                    'quote_value': True,
+                    'quote_value': False,
+                    'required': True,
                     'type': 'boolean'
                 },
                 {
                     'additional_help': 'A required list',
+                    'default_value': None,
                     'name': 'required_list_variable',
                     'quote_value': True,
+                    'required': True,
                     'type': 'list'
+                },
+                {
+                    'additional_help': 'Override the stringy list',
+                    'default_value': ['value 1',
+                                    'value 2'],
+                    'name': 'example_list_input',
+                    'quote_value': True,
+                    'required': False,
+                    'type': 'text'
                 }
             ]
 
-    @pytest.mark.parametrize('readme_content,expected_output', [
+    @pytest.mark.parametrize('readme_content,example_analaytics_token,expected_output', [
         # Test README with basic formatting
         (
             """
@@ -392,8 +478,9 @@ It performs the following:
  * Tests the README
  * Passes tests
 """,
-"""
-<h1>Test terraform module</h1>
+            "unittest-analytics_token",
+            """
+<h1 id="terrareg-anchor-READMEmd-test-terraform-module">Test terraform module</h1>
 <p>This is a terraform module to create a README example.</p>
 <p>It performs the following:</p>
 <ul>
@@ -418,8 +505,9 @@ module "test-usage" {
 }
 ```
 """,
-"""
-<h1>Test external module</h1>
+            "unittest-analytics_token",
+            """
+<h1 id="terrareg-anchor-READMEmd-test-external-module">Test external module</h1>
 <pre><code>module &quot;test-usage&quot; {
   source  = &quot;an-external-module/test&quot;
   version = &quot;1.0.0&quot;
@@ -444,10 +532,11 @@ module "test-usage" {
 }
 ```
 """,
-"""
-<h1>Test external module</h1>
+            "unittest-analytics_token",
+            """
+<h1 id="terrareg-anchor-READMEmd-test-external-module">Test external module</h1>
 <pre><code>module &quot;test-usage&quot; {
-  source  = &quot;example.com/moduledetails/readme-tests/provider&quot;
+  source  = &quot;example.com/unittest-analytics_token__moduledetails/readme-tests/provider&quot;
   version = &quot;&gt;= 1.0.0, &lt; 2.0.0&quot;
 
   some_variable = true
@@ -471,10 +560,11 @@ module "test-usage" {
 }
 ```
 """,
-"""
-<h1>Test external module</h1>
+            "unittest-analytics_token",
+            """
+<h1 id="terrareg-anchor-READMEmd-test-external-module">Test external module</h1>
 <pre><code>module &quot;test-usage&quot; {
-  source  = &quot;example.com/moduledetails/readme-tests/provider&quot;
+  source  = &quot;example.com/unittest-analytics_token__moduledetails/readme-tests/provider&quot;
   version = &quot;&gt;= 1.0.0, &lt; 2.0.0&quot;
 
   some_variable = true
@@ -498,10 +588,11 @@ module "test-usage" {
 }
 ```
 """,
-"""
-<h1>Test external module</h1>
+            "unittest-analytics_token",
+            """
+<h1 id="terrareg-anchor-READMEmd-test-external-module">Test external module</h1>
 <pre><code>module &quot;test-usage&quot; {
-  source  = &quot;example.com/moduledetails/readme-tests/provider//modules/testsubmodule&quot;
+  source  = &quot;example.com/unittest-analytics_token__moduledetails/readme-tests/provider//modules/testsubmodule&quot;
   version = &quot;&gt;= 1.0.0, &lt; 2.0.0&quot;
 
   some_variable = true
@@ -525,10 +616,11 @@ module "test-usage" {
 }
 ```
 """,
-"""
-<h1>Test external module</h1>
+            "unittest-analytics_token",
+            """
+<h1 id="terrareg-anchor-READMEmd-test-external-module">Test external module</h1>
 <pre><code>module &quot;test-usage&quot; {
-  source  = &quot;example.com/moduledetails/readme-tests/provider//modules/testsubmodule&quot;
+  source  = &quot;example.com/unittest-analytics_token__moduledetails/readme-tests/provider//modules/testsubmodule&quot;
   version = &quot;&gt;= 1.0.0, &lt; 2.0.0&quot;
 
   some_variable = true
@@ -562,8 +654,57 @@ module "test-external-call" {
 }
 ```
 """,
+            "unittest-analytics_token",
+            """
+<h1 id="terrareg-anchor-READMEmd-test-external-module">Test external module</h1>
+<pre><code>module &quot;test-usage1&quot; {
+  source  = &quot;example.com/unittest-analytics_token__moduledetails/readme-tests/provider&quot;
+  version = &quot;&gt;= 1.0.0, &lt; 2.0.0&quot;
+
+  some_variable = true
+  another       = &quot;value&quot;
+}
+module &quot;test-usage2&quot; {
+  source  = &quot;example.com/unittest-analytics_token__moduledetails/readme-tests/provider//modules/testsubmodule&quot;
+  version = &quot;&gt;= 1.0.0, &lt; 2.0.0&quot;
+
+  some_variable = true
+  another       = &quot;value&quot;
+}
+module &quot;test-external-call&quot; {
+  source  = &quot;external-module&quot;
+  version = &quot;1.0.3&quot;
+}
+</code></pre>
 """
-<h1>Test external module</h1>
+        ),
+        # Test without analytics token
+        (
+            """
+# Test external module
+
+```
+module "test-usage1" {
+  source = "./"
+
+  some_variable = true
+  another       = "value"
+}
+module "test-usage2" {
+  source = "./modules/testsubmodule"
+
+  some_variable = true
+  another       = "value"
+}
+module "test-external-call" {
+  source  = "external-module"
+  version = "1.0.3"
+}
+```
+""",
+            "",
+            """
+<h1 id="terrareg-anchor-READMEmd-test-external-module">Test external module</h1>
 <pre><code>module &quot;test-usage1&quot; {
   source  = &quot;example.com/moduledetails/readme-tests/provider&quot;
   version = &quot;&gt;= 1.0.0, &lt; 2.0.0&quot;
@@ -585,7 +726,6 @@ module &quot;test-external-call&quot; {
 </code></pre>
 """
         ),
-
         # Test module call with different indentation
         (
             """
@@ -605,30 +745,32 @@ module "test-usage3" {
 }
 ```
 """,
-"""
-<h1>Test external module</h1>
+            "unittest-analytics_token",
+            """
+<h1 id="terrareg-anchor-READMEmd-test-external-module">Test external module</h1>
 <pre><code>module &quot;test-usage1&quot; {
-  source        = &quot;example.com/moduledetails/readme-tests/provider&quot;
+  source        = &quot;example.com/unittest-analytics_token__moduledetails/readme-tests/provider&quot;
   version       = &quot;&gt;= 1.0.0, &lt; 2.0.0&quot;
   some_variable = true
   another       = &quot;value&quot;
 }
 module &quot;test-usage2&quot; {
-    source  = &quot;example.com/moduledetails/readme-tests/provider//modules/testsubmodule&quot;
+    source  = &quot;example.com/unittest-analytics_token__moduledetails/readme-tests/provider//modules/testsubmodule&quot;
     version = &quot;&gt;= 1.0.0, &lt; 2.0.0&quot;
 }
 module &quot;test-usage3&quot; {
-          source  = &quot;example.com/moduledetails/readme-tests/provider//modules/testsubmodule&quot;
+          source  = &quot;example.com/unittest-analytics_token__moduledetails/readme-tests/provider//modules/testsubmodule&quot;
           version = &quot;&gt;= 1.0.0, &lt; 2.0.0&quot;
 }
 </code></pre>
 """
         ),
     ])
-    def test_get_readme_html(self, readme_content, expected_output):
+    def test_get_readme_html(self, readme_content, example_analaytics_token, expected_output):
         """Test get_readme_html method, ensuring it replaces example source and converts from markdown to HTML."""
 
-        with unittest.mock.patch('terrareg.config.Config.TERRAFORM_EXAMPLE_VERSION_TEMPLATE', '>= {major}.{minor}.{patch}, < {major_plus_one}.0.0'):
+        with unittest.mock.patch('terrareg.config.Config.TERRAFORM_EXAMPLE_VERSION_TEMPLATE', '>= {major}.{minor}.{patch}, < {major_plus_one}.0.0'), \
+                unittest.mock.patch('terrareg.config.Config.EXAMPLE_ANALYTICS_TOKEN', example_analaytics_token):
             module_version = ModuleVersion(ModuleProvider(Module(Namespace('moduledetails'), 'readme-tests'), 'provider'), '1.0.0')
             # Set README in module version
             module_version.module_details.update_attributes(readme_content=readme_content)
@@ -1182,3 +1324,27 @@ module &quot;test-usage3&quot; {
 
         finally:
             module_provider.update_git_path(None)
+
+    @pytest.mark.parametrize('published,beta,is_latest_version,expected_value', [
+        # Latest published non-beta
+        (True, False, True, []),
+        # Non-latest published non-beta
+        (True, False, False, ['This version of the module is not the latest version.', 'To use this specific version, it must be pinned in Terraform']),
+
+        # Non-latest un-published non-beta
+        (False, False, False, ['This version of this module has not yet been published,', 'meaning that it cannot yet be used by Terraform']),
+
+        # Un-published beta
+        (False, True, False, ['This version of this module has not yet been published,', 'meaning that it cannot yet be used by Terraform']),
+        # Published beta
+        (True, True, False, ['This version of the module is a beta version.', 'To use this version, it must be pinned in Terraform']),
+    ])
+    def test_get_terraform_example_version_comment(self, published, beta, is_latest_version, expected_value):
+        """Test get_terraform_example_version_comment"""
+        with unittest.mock.patch("terrareg.models.ModuleVersion.beta", beta), \
+                unittest.mock.patch("terrareg.models.ModuleVersion.published", published), \
+                unittest.mock.patch("terrareg.models.ModuleVersion.is_latest_version", is_latest_version):
+            module_provider = ModuleProvider.get(Module(Namespace('moduledetails'), 'withterraformdocs'), 'testprovider')
+            module_version = ModuleVersion.get(module_provider, '1.5.0')
+
+            assert module_version.get_terraform_example_version_comment() == expected_value

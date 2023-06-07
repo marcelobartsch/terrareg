@@ -1,6 +1,6 @@
 
 from unittest import mock
-from test.unit.terrareg import MockNamespace, TerraregUnitTest, setup_test_data, mocked_server_namespace_fixture
+from test.unit.terrareg import TerraregUnitTest, setup_test_data, mock_models
 from test import client
 
 
@@ -20,13 +20,15 @@ class TestApiTerraregNamespaceList(TerraregUnitTest):
             mocked_namespace_get_all.assert_called_once()
 
     @setup_test_data()
-    def test_with_namespaces_present(self, client, mocked_server_namespace_fixture):
+    def test_with_namespaces_present(self, client, mock_models):
         """Test endpoint with existing namespaces."""
         res = client.get('/v1/terrareg/namespaces')
         assert res.status_code == 200
         assert res.json == [
-            {'name': 'testnamespace', 'view_href': '/modules/testnamespace'},
-            {'name': 'secondtestnamespace', 'view_href': '/modules/secondtestnamespace'},
-            {'name': 'smallernamespacelist', 'view_href': '/modules/smallernamespacelist'},
-            {'name': 'moduleextraction', 'view_href': '/modules/moduleextraction'}
+            {'name': 'testnamespace', 'view_href': '/modules/testnamespace', 'display_name': None},
+            {'name': 'moduledetails', 'view_href': '/modules/moduledetails', 'display_name': None},
+            {'name': 'secondtestnamespace', 'view_href': '/modules/secondtestnamespace', 'display_name': None},
+            {'name': 'smallernamespacelist', 'view_href': '/modules/smallernamespacelist', 'display_name': 'Smaller Namespace List'},
+            {'name': 'moduleextraction', 'view_href': '/modules/moduleextraction', 'display_name': None},
+            {'name': 'emptynamespace', 'view_href': '/modules/emptynamespace', 'display_name': None}
         ]

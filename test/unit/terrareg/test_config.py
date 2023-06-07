@@ -65,7 +65,26 @@ class TestConfig:
         ('VERIFIED_MODULE_LABEL', None),
         ('INFRACOST_API_KEY', None),
         ('INFRACOST_PRICING_API_ENDPOINT', None),
-        ('DOMAIN_NAME', None)
+        ('DOMAIN_NAME', None),
+        ('PUBLIC_URL', None),
+        ('ADDITIONAL_MODULE_TABS', None),
+        ('OPENID_CONNECT_LOGIN_TEXT', None),
+        ('OPENID_CONNECT_CLIENT_ID', None),
+        ('OPENID_CONNECT_CLIENT_SECRET', None),
+        ('OPENID_CONNECT_ISSUER', None),
+        ('SAML2_LOGIN_TEXT', None),
+        ('SAML2_ENTITY_ID', None),
+        ('SAML2_IDP_METADATA_URL', None),
+        ('SAML2_ISSUER_ENTITY_ID', None),
+        ('SAML2_LOGIN_TEXT', None),
+        ('SAML2_PRIVATE_KEY', None),
+        ('SAML2_PUBLIC_KEY', None),
+        ('SAML2_GROUP_ATTRIBUTE', None),
+        ('INTERNAL_EXTRACTION_ANALYITCS_TOKEN', None),
+        ('MODULE_LINKS', None),
+        ('DEFAULT_TERRAFORM_VERSION', None),
+        ('TERRAFORM_ARCHIVE_MIRROR', None),
+        ('SENTRY_DSN', None)
     ])
     def test_string_configs(self, config_name, override_expected_value):
         """Test string configs to ensure they are overriden with environment variables."""
@@ -73,9 +92,19 @@ class TestConfig:
         with unittest.mock.patch('os.environ', {config_name: 'unittest-value'}):
             assert getattr(terrareg.config.Config(), config_name) == (override_expected_value if override_expected_value is not None else 'unittest-value')
 
+    @pytest.mark.parametrize('config_name, test_value, test_expected', [
+        ('SENTRY_TRACES_SAMPLE_RATE', '1.523', 1.523)
+    ])
+    def test_custom_string_configs(self, config_name, test_value, test_expected):
+        """Test string configs with custom values to ensure they are overriden with environment variables."""
+        self.register_checked_config(config_name)
+        with unittest.mock.patch('os.environ', {config_name: test_value}):
+            assert getattr(terrareg.config.Config(), config_name) == test_expected
+
     @pytest.mark.parametrize('config_name', [
         'ADMIN_SESSION_EXPIRY_MINS',
-        'LISTEN_PORT'
+        'LISTEN_PORT',
+        'GIT_CLONE_TIMEOUT'
     ])
     def test_integer_configs(self, config_name):
         """Test integer configs to ensure they are overriden with environment variables."""
@@ -102,7 +131,9 @@ class TestConfig:
         ('REQUIRED_MODULE_METADATA_ATTRIBUTES'),
         ('TRUSTED_NAMESPACES'),
         ('UPLOAD_API_KEYS'),
-        ('VERIFIED_MODULE_NAMESPACES')
+        ('VERIFIED_MODULE_NAMESPACES'),
+        ('IGNORE_ANALYTICS_TOKEN_AUTH_KEYS'),
+        ('OPENID_CONNECT_SCOPES')
     ])
     def test_list_configs(self, config_name, test_value, expected_value):
         """Test list configs to ensure they are overriden with environment variables."""
@@ -110,6 +141,23 @@ class TestConfig:
         # Check that input value produces expected list value
         with unittest.mock.patch('os.environ', {config_name: test_value}):
             assert getattr(terrareg.config.Config(), config_name) == expected_value
+
+    @pytest.mark.parametrize('config_name,enum,expected_default', [
+        ('MODULE_VERSION_REINDEX_MODE', terrareg.config.ModuleVersionReindexMode, terrareg.config.ModuleVersionReindexMode.LEGACY)
+    ])
+    def test_enum_configs(self, config_name, enum, expected_default):
+        """Test enum configs to ensure they are overriden with environment variables."""
+        self.register_checked_config(config_name)
+        check_dict = {None: expected_default}
+        check_dict.update({
+            i.value: i
+            for i in enum
+        })
+        # Check that input value produces expected list value
+        for test_env_value, expected_enum in check_dict.items():
+            os_env = {} if test_env_value is None else {config_name: test_env_value}
+            with unittest.mock.patch('os.environ', os_env):
+                assert getattr(terrareg.config.Config(), config_name) == expected_enum
 
     @pytest.mark.parametrize('test_value,expected_value', [
         ('true', True),
@@ -129,6 +177,7 @@ class TestConfig:
         'ALLOW_MODULE_HOSTING',
         'ALLOW_UNIDENTIFIED_DOWNLOADS',
         'AUTO_CREATE_MODULE_PROVIDER',
+        'AUTO_CREATE_NAMESPACE',
         'AUTO_PUBLISH_MODULE_VERSIONS',
         'DEBUG',
         'DELETE_EXTERNALLY_HOSTED_ARTIFACTS',
@@ -137,7 +186,12 @@ class TestConfig:
         'ENABLE_SECURITY_SCANNING',
         'AUTOGENERATE_USAGE_BUILDER_VARIABLES',
         'THREADED',
-        'INFRACOST_TLS_INSECURE_SKIP_VERIFY'
+        'INFRACOST_TLS_INSECURE_SKIP_VERIFY',
+        'ENABLE_ACCESS_CONTROLS',
+        'SAML2_DEBUG',
+        'OPENID_CONNECT_DEBUG',
+        "MANAGE_TERRAFORM_RC_FILE",
+        'DISABLE_ANALYTICS'
     ])
     def test_boolean_configs(self, config_name, test_value, expected_value):
         """Test boolean configs to ensure they are overriden with environment variables."""

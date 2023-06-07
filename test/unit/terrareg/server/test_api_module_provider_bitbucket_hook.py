@@ -8,7 +8,7 @@ import pytest
 
 import terrareg.errors
 from test.unit.terrareg import (
-    mocked_server_namespace_fixture,
+    mock_models,
     setup_test_data, TerraregUnitTest
 )
 from test import client
@@ -18,10 +18,10 @@ class TestApiModuleVersionBitbucketHook(TerraregUnitTest):
     """Test TestApiModuleVersionCreateBitBucketHook resource."""
 
     @setup_test_data()
-    def test_hook_with_full_payload_single_change(self, client, mocked_server_namespace_fixture):
+    def test_hook_with_full_payload_single_change(self, client, mock_models):
         """Test hook call full payload."""
         with unittest.mock.patch(
-                    'terrareg.models.ModuleVersion.prepare_module') as mocked_prepare_module, \
+                    'terrareg.models.ModuleVersion.prepare_module', return_value=False) as mocked_prepare_module, \
                 unittest.mock.patch(
                     'terrareg.module_extractor.GitModuleExtractor.process_upload') as mocked_process_upload:
 
@@ -74,12 +74,57 @@ class TestApiModuleVersionBitbucketHook(TerraregUnitTest):
             mocked_prepare_module.assert_called_once()
             mocked_process_upload.assert_called_once()
 
+    @setup_test_data()
+    @pytest.mark.parametrize('pre_existing_published_module_version', [
+        False,
+        True
+    ])
+    def test_hook_with_reindexing_published_module(self, pre_existing_published_module_version, client, mock_models):
+        """Test hook call whilst re-indexing a published module."""
+        with unittest.mock.patch(
+                    'terrareg.models.ModuleVersion.prepare_module', return_value=pre_existing_published_module_version) as mocked_prepare_module, \
+                unittest.mock.patch(
+                    'terrareg.models.ModuleVersion.publish') as mocked_publish, \
+                unittest.mock.patch(
+                    'terrareg.module_extractor.GitModuleExtractor.process_upload') as mocked_process_upload:
+
+            res = client.post(
+                '/v1/terrareg/modules/moduleextraction/bitbucketexample/testprovider/hooks/bitbucket',
+                json={
+                    "eventKey": "repo:refs_changed", "date": "2022-04-23T21:21:46+0000",
+                    "actor": {
+                    },
+                    "repository": {
+                    },
+                    "changes": [
+                        {
+                            "ref": {
+                                "id": "refs/tags/v4.0.6",
+                                "displayId": "v4.0.6",
+                                "type": "TAG"
+                            },
+                            "refId": "refs/tags/v4.0.6",
+                            "type": "ADD"
+                        }
+                    ]
+                }
+            )
+
+            assert res.status_code == 200
+            assert res.json == {'status': 'Success', 'message': 'Imported all provided tags', 'tags': {'4.0.6': {'status': 'Success'}}}
+
+            mocked_prepare_module.assert_called_once()
+            mocked_process_upload.assert_called_once()
+            if pre_existing_published_module_version:
+                mocked_publish.assert_called_once_with()
+            else:
+                mocked_publish.assert_not_called()
 
     @setup_test_data()
-    def test_hook_with_module_provider_without_repository_url(self, client, mocked_server_namespace_fixture):
+    def test_hook_with_module_provider_without_repository_url(self, client, mock_models):
         """Test hook call to module provider with no repository url."""
         with unittest.mock.patch(
-                    'terrareg.models.ModuleVersion.prepare_module') as mocked_prepare_module, \
+                    'terrareg.models.ModuleVersion.prepare_module', return_value=False) as mocked_prepare_module, \
                 unittest.mock.patch(
                     'terrareg.module_extractor.GitModuleExtractor.process_upload') as mocked_process_upload:
 
@@ -109,10 +154,10 @@ class TestApiModuleVersionBitbucketHook(TerraregUnitTest):
             mocked_process_upload.assert_not_called()
 
     @setup_test_data()
-    def test_hook_with_prepare_module_exception(self, client, mocked_server_namespace_fixture):
-        """Test hook call with multiple tag changes."""
+    def test_hook_with_prepare_module_exception(self, client, mock_models):
+        """Test hook call with exception thrown by prepare_module."""
         with unittest.mock.patch(
-                    'terrareg.models.ModuleVersion.prepare_module') as mocked_prepare_module, \
+                    'terrareg.models.ModuleVersion.prepare_module', return_value=False) as mocked_prepare_module, \
                 unittest.mock.patch(
                     'terrareg.module_extractor.GitModuleExtractor.process_upload') as mocked_process_upload:
 
@@ -137,10 +182,10 @@ class TestApiModuleVersionBitbucketHook(TerraregUnitTest):
                 }
             )
 
-            assert res.status_code == 200
+            assert res.status_code == 500
             assert res.json == {
-                'status': 'Success',
-                'message': 'Imported all provided tags',
+                'status': 'Error',
+                'message': 'One or more tags failed to import',
                 'tags': {
                     '6.2.0': {'status': 'Failed', 'message': 'Unittest error'}
                 }
@@ -150,10 +195,10 @@ class TestApiModuleVersionBitbucketHook(TerraregUnitTest):
             mocked_process_upload.assert_not_called()
 
     @setup_test_data()
-    def test_hook_with_extraction_exception(self, client, mocked_server_namespace_fixture):
-        """Test hook call with multiple tag changes."""
+    def test_hook_with_extraction_exception(self, client, mock_models):
+        """Test hook call with exception during extraction."""
         with unittest.mock.patch(
-                    'terrareg.models.ModuleVersion.prepare_module') as mocked_prepare_module, \
+                    'terrareg.models.ModuleVersion.prepare_module', return_value=False) as mocked_prepare_module, \
                 unittest.mock.patch(
                     'terrareg.module_extractor.GitModuleExtractor.process_upload') as mocked_process_upload:
 
@@ -178,10 +223,10 @@ class TestApiModuleVersionBitbucketHook(TerraregUnitTest):
                 }
             )
 
-            assert res.status_code == 200
+            assert res.status_code == 500
             assert res.json == {
-                'status': 'Success',
-                'message': 'Imported all provided tags',
+                'status': 'Error',
+                'message': 'One or more tags failed to import',
                 'tags': {
                     '6.2.0': {'status': 'Failed', 'message': 'Unittest error'}
                 }
@@ -191,10 +236,10 @@ class TestApiModuleVersionBitbucketHook(TerraregUnitTest):
             mocked_process_upload.assert_called()
 
     @setup_test_data()
-    def test_hook_with_multiple_tags(self, client, mocked_server_namespace_fixture):
+    def test_hook_with_multiple_tags(self, client, mock_models):
         """Test hook call with multiple tag changes."""
         with unittest.mock.patch(
-                    'terrareg.models.ModuleVersion.prepare_module') as mocked_prepare_module, \
+                    'terrareg.models.ModuleVersion.prepare_module', return_value=False) as mocked_prepare_module, \
                 unittest.mock.patch(
                     'terrareg.module_extractor.GitModuleExtractor.process_upload') as mocked_process_upload:
 
@@ -242,10 +287,10 @@ class TestApiModuleVersionBitbucketHook(TerraregUnitTest):
             mocked_process_upload.assert_called()
 
     @setup_test_data()
-    def test_hook_with_invalid_changes(self, client, mocked_server_namespace_fixture):
+    def test_hook_with_invalid_changes(self, client, mock_models):
         """Test hook call with multiple tag changes."""
         with unittest.mock.patch(
-                    'terrareg.models.ModuleVersion.prepare_module') as mocked_prepare_module, \
+                    'terrareg.models.ModuleVersion.prepare_module', return_value=False) as mocked_prepare_module, \
                 unittest.mock.patch(
                     'terrareg.module_extractor.GitModuleExtractor.process_upload') as mocked_process_upload:
 
@@ -402,7 +447,7 @@ class TestApiModuleVersionBitbucketHook(TerraregUnitTest):
     def _test_bitbucket_with_no_tag_result_expected(self, client, payload):
         """Test bitbucket call expecting no tags found."""
         with unittest.mock.patch(
-                    'terrareg.models.ModuleVersion.prepare_module') as mocked_prepare_module, \
+                    'terrareg.models.ModuleVersion.prepare_module', return_value=False) as mocked_prepare_module, \
                 unittest.mock.patch(
                     'terrareg.module_extractor.GitModuleExtractor.process_upload') as mocked_process_upload:
 
@@ -422,7 +467,7 @@ class TestApiModuleVersionBitbucketHook(TerraregUnitTest):
             mocked_process_upload.assert_not_called()
 
     @setup_test_data()
-    def test_hook_with_commit_change(self, client, mocked_server_namespace_fixture):
+    def test_hook_with_commit_change(self, client, mock_models):
         """Test hook call with commit."""
         self._test_bitbucket_with_no_tag_result_expected(client,
             {
@@ -440,7 +485,7 @@ class TestApiModuleVersionBitbucketHook(TerraregUnitTest):
         )
 
     @setup_test_data()
-    def test_hook_with_change_without_ref_type(self, client, mocked_server_namespace_fixture):
+    def test_hook_with_change_without_ref_type(self, client, mock_models):
         """Test hook call with with without ref type."""
         self._test_bitbucket_with_no_tag_result_expected(client,
             {
@@ -457,7 +502,7 @@ class TestApiModuleVersionBitbucketHook(TerraregUnitTest):
         )
 
     @setup_test_data()
-    def test_hook_with_no_type(self, client, mocked_server_namespace_fixture):
+    def test_hook_with_no_type(self, client, mock_models):
         """Test hook call with with without type."""
         self._test_bitbucket_with_no_tag_result_expected(client,
             {
@@ -476,7 +521,7 @@ class TestApiModuleVersionBitbucketHook(TerraregUnitTest):
         )
 
     @setup_test_data()
-    def test_hook_with_none_ref(self, client, mocked_server_namespace_fixture):
+    def test_hook_with_none_ref(self, client, mock_models):
         """Test hook call with with without type."""
         self._test_bitbucket_with_no_tag_result_expected(client,
             {
@@ -492,7 +537,7 @@ class TestApiModuleVersionBitbucketHook(TerraregUnitTest):
         )
 
     @setup_test_data()
-    def test_hook_with_deleted_tag(self, client, mocked_server_namespace_fixture):
+    def test_hook_with_deleted_tag(self, client, mock_models):
         """Test hook call with with deleted tag."""
         self._test_bitbucket_with_no_tag_result_expected(client,
             {
@@ -513,7 +558,7 @@ class TestApiModuleVersionBitbucketHook(TerraregUnitTest):
         )
 
     @setup_test_data()
-    def test_hook_without_change_type(self, client, mocked_server_namespace_fixture):
+    def test_hook_without_change_type(self, client, mock_models):
         """Test hook call with without change type."""
         self._test_bitbucket_with_no_tag_result_expected(client,
             {
@@ -533,7 +578,7 @@ class TestApiModuleVersionBitbucketHook(TerraregUnitTest):
         )
 
     @setup_test_data()
-    def test_hook_with_nontag_changes(self, client, mocked_server_namespace_fixture):
+    def test_hook_with_nontag_changes(self, client, mock_models):
         """Test hook call with non tag changes."""
         self._test_bitbucket_with_no_tag_result_expected(
             client,
@@ -554,10 +599,10 @@ class TestApiModuleVersionBitbucketHook(TerraregUnitTest):
         'sha256=invalidsignature'
     ])
     @setup_test_data()
-    def test_hook_with_invalid_signatures_with_api_keys_enabled(self, signature, client, mocked_server_namespace_fixture):
+    def test_hook_with_invalid_signatures_with_api_keys_enabled(self, signature, client, mock_models):
         """Test hook call with upload API keys enabled with invalid request signature."""
         with unittest.mock.patch(
-                    'terrareg.models.ModuleVersion.prepare_module') as mocked_prepare_module, \
+                    'terrareg.models.ModuleVersion.prepare_module', return_value=False) as mocked_prepare_module, \
                 unittest.mock.patch(
                     'terrareg.module_extractor.GitModuleExtractor.process_upload') as mocked_process_upload, \
                 unittest.mock.patch('terrareg.config.Config.UPLOAD_API_KEYS', ['test-api-key1', 'test-api-key2']):
@@ -580,10 +625,10 @@ class TestApiModuleVersionBitbucketHook(TerraregUnitTest):
             mocked_process_upload.assert_not_called()
 
     @setup_test_data()
-    def test_hook_with_valid_api_key_signature(self, client, mocked_server_namespace_fixture):
+    def test_hook_with_valid_api_key_signature(self, client, mock_models):
         """Test hook call with valid API key signature."""
         with unittest.mock.patch(
-                    'terrareg.models.ModuleVersion.prepare_module') as mocked_prepare_module, \
+                    'terrareg.models.ModuleVersion.prepare_module', return_value=False) as mocked_prepare_module, \
                 unittest.mock.patch(
                     'terrareg.module_extractor.GitModuleExtractor.process_upload') as mocked_process_upload, \
                 unittest.mock.patch('terrareg.config.Config.UPLOAD_API_KEYS', ['test-api-key1', 'test-api-key2']):

@@ -1,8 +1,11 @@
 """Provide extraction method of modules."""
 
+from contextlib import contextmanager
 import os
+import threading
 from typing import Type
 import tempfile
+import uuid
 import zipfile
 import tarfile
 import subprocess
@@ -18,29 +21,43 @@ import magic
 from bs4 import BeautifulSoup
 import markdown
 
-from terrareg.models import BaseSubmodule, Example, ExampleFile, ModuleVersion, Submodule, ModuleDetails
+from terrareg.models import BaseSubmodule, Example, ExampleFile, ModuleVersion, Submodule, ModuleDetails, ModuleVersionFile
 from terrareg.database import Database
 from terrareg.errors import (
     UnableToProcessTerraformError,
     UnknownFiletypeError,
     InvalidTerraregMetadataFileError,
     MetadataDoesNotContainRequiredAttributeError,
-    GitCloneError
+    GitCloneError,
+    UnableToGetGlobalTerraformLockError,
+    TerraformVersionSwitchError
 )
-from terrareg.utils import PathDoesNotExistError, safe_iglob, safe_join_paths
+from terrareg.utils import PathDoesNotExistError, get_public_url_details, safe_iglob, safe_join_paths
 from terrareg.config import Config
+from terrareg.constants import EXTRACTION_VERSION
 
 
 class ModuleExtractor:
     """Provide extraction method of moduls."""
 
     TERRAREG_METADATA_FILES = ['terrareg.json', '.terrareg.json']
+    TERRAFORM_LOCK = threading.Lock()
 
     def __init__(self, module_version: ModuleVersion):
         """Create temporary directories and store member variables."""
         self._module_version = module_version
         self._extract_directory = tempfile.TemporaryDirectory()  # noqa: R1732
         self._upload_directory = tempfile.TemporaryDirectory()  # noqa: R1732
+
+    @property
+    def terraform_binary(self):
+        """Return path of terraform binary"""
+        return os.path.join(os.getcwd(), "bin", "terraform")
+
+    @property
+    def terraform_rc_file(self):
+        """Return path to terraformrc file"""
+        return os.path.join(os.path.expanduser("~"), ".terraformrc")
 
     @property
     def extract_directory(self):
@@ -83,12 +100,48 @@ class ModuleExtractor:
         try:
             terradocs_output = subprocess.check_output(['terraform-docs', 'json', module_path])
         except subprocess.CalledProcessError as exc:
-            raise UnableToProcessTerraformError('An error occurred whilst processing the terraform code.')
+            raise UnableToProcessTerraformError(
+                'An error occurred whilst processing the terraform code.' +
+                (f": {str(exc)}: {exc.output.decode('utf-8')}" if Config().DEBUG else "")
+            )
 
         return json.loads(terradocs_output)
 
-    @staticmethod
-    def _run_tfsec(module_path):
+    @contextmanager
+    def _switch_terraform_versions(self, module_path):
+        """Switch terraform to required version for module"""
+        # Wait for global lock on terraform, so that only
+        # instance can run terraform at a time
+        if not ModuleExtractor.TERRAFORM_LOCK.acquire(blocking=True, timeout=60):
+            raise UnableToGetGlobalTerraformLockError(
+                "Unable to obtain global Terraform lock in 60 seconds"
+            )
+        try:
+            default_terraform_version = Config().DEFAULT_TERRAFORM_VERSION
+            tfswitch_env = os.environ.copy()
+
+            if default_terraform_version:
+                tfswitch_env["TF_VERSION"] = default_terraform_version
+
+            # Run tfswitch
+            try:
+                subprocess.check_output(
+                    ["tfswitch", "--mirror", Config().TERRAFORM_ARCHIVE_MIRROR, "--bin", self.terraform_binary],
+                    env=tfswitch_env,
+                    cwd=module_path
+                )
+            except subprocess.CalledProcessError as exc:
+                print("An error occured whilst running tfswitch:", str(exc))
+                raise TerraformVersionSwitchError(
+                    "An error occurred whilst initialising Terraform version" +
+                    (f": {str(exc)}: {exc.output.decode('utf-8')}" if Config().DEBUG else "")
+                )
+
+            yield
+        finally:
+            ModuleExtractor.TERRAFORM_LOCK.release()
+
+    def _run_tfsec(self, module_path):
         """Run tfsec and return output."""
         try:
             raw_output = subprocess.check_output([
@@ -98,16 +151,103 @@ class ModuleExtractor:
                 module_path
             ])
         except subprocess.CalledProcessError as exc:
-            raise UnableToProcessTerraformError('An error occurred whilst performing security scan of code.')
+            raise UnableToProcessTerraformError(
+                'An error occurred whilst performing security scan of code.' +
+                (f": {str(exc)}: {exc.output.decode('utf-8')}" if Config().DEBUG else "")
+            )
 
         tfsec_results = json.loads(raw_output)
 
         # Strip the extraction directory from all paths in results
         if tfsec_results['results']:
             for result in tfsec_results['results']:
-                result['location']['filename'] = result['location']['filename'].replace(module_path + '/', '')
+                result['location']['filename'] = result['location']['filename'].replace(self._extract_directory.name + '/', '')
 
         return tfsec_results
+
+    def _create_terraform_rc_file(self):
+        """Create terraform RC file, if enabled"""
+        # Create .terraformrc file, if configured to do so
+        config = Config()
+        if config.MANAGE_TERRAFORM_RC_FILE:
+            terraform_rc_file_content = """
+# Cache plugins
+plugin_cache_dir   = "$HOME/.terraform.d/plugin-cache"
+disable_checkpoint = true
+
+"""
+
+            # Create .terraform.d/plugin-cache directory tree,
+            # allowing directory to already exist.
+            plugin_cache_directory = os.path.join(os.path.expanduser('~'), '.terraform.d', 'plugin-cache')
+            os.makedirs(plugin_cache_directory, exist_ok=True)
+
+            _, domain_name, _ = get_public_url_details()
+
+            if domain_name:
+                terraform_rc_file_content += f"""
+credentials "{domain_name}" {{
+  token = "{config.INTERNAL_EXTRACTION_ANALYITCS_TOKEN}"
+}}
+"""
+            with open(self.terraform_rc_file, "w") as terraform_rc_fh:
+                terraform_rc_fh.write(terraform_rc_file_content)
+
+    def _override_tf_backend(self, module_path):
+        """Attempt to find any files that set terraform backend and create override"""
+        backend_regex = re.compile(r"^^(\n|.)*terraform\s*\{[\s\n.]+(.|\n)*backend\s+\"[\w]+\"\s+\{", re.MULTILINE)
+        backend_filename = None
+
+        # Check all .tf files and check content for matching backend
+        for scan_file in glob.glob(os.path.join(module_path, "*.tf")):
+            with open(scan_file, "r") as scan_file_fh:
+                if backend_regex.match(scan_file_fh.read()):
+                    # If the file contained a matching backend block,
+                    # set the backend filename and stop iterating over files
+                    backend_filename = scan_file
+                    break
+
+        if not backend_filename:
+            return None
+
+        override_filename = re.sub(r"\.tf$", "_override.tf", backend_filename)
+        state_file = ".local-state"
+        with open(os.path.join(module_path, override_filename), "w") as backend_tf_fh:
+            backend_tf_fh.write(f"""
+terraform {{
+  backend "local" {{
+    path = "./{state_file}"
+  }}
+}}
+    """)
+        return override_filename
+
+    def _run_tf_init(self, module_path):
+        """Perform terraform init"""
+        self._create_terraform_rc_file()
+        self._override_tf_backend(module_path=module_path)
+
+        try:
+            subprocess.check_call([self.terraform_binary, "init"], cwd=module_path)
+        except subprocess.CalledProcessError:
+            return False
+        return True
+
+    def _get_graph_data(self, module_path):
+        """Run inframap and generate graphiz"""
+        try:
+            terraform_graph_data = subprocess.check_output(
+                [self.terraform_binary, "graph"],
+                cwd=module_path
+            )
+        except subprocess.CalledProcessError as exc:
+            print("Failed to generate Terraform graph data:", str(exc))
+            print(exc.output.decode('utf-8'))
+            return None
+
+        terraform_graph_data = terraform_graph_data.decode("utf-8")
+
+        return terraform_graph_data
 
     @staticmethod
     def _get_readme_content(module_path):
@@ -133,9 +273,10 @@ class ModuleExtractor:
             with open(path, 'r') as terrareg_fh:
                 try:
                     terrareg_metadata = json.loads(''.join(terrareg_fh.readlines()))
-                except:
+                except Exception as exc:
                     raise InvalidTerraregMetadataFileError(
-                        'An error occured whilst processing the terrareg metadata file.'
+                        'An error occured whilst processing the terrareg metadata file.' +
+                        (f": {str(exc)}" if Config().DEBUG else "")
                     )
 
             # Remove the meta-data file, so it is not added to the archive
@@ -151,6 +292,26 @@ class ModuleExtractor:
 
         return terrareg_metadata
 
+    def _extract_additional_tab_files(self):
+        """Extract addition files for populating tabs in UI"""
+        config = Config()
+
+        files_extracted = []
+        # Iterate through all files of all additionally defined tabs
+        for tab_config in json.loads(config.ADDITIONAL_MODULE_TABS):
+            for file_name in tab_config[1]:
+                path = safe_join_paths(self.extract_directory, file_name)
+                # Check if file exists
+                if file_name in files_extracted or not os.path.exists(path):
+                    continue
+
+                # Read file contents and create DB record
+                with open(path, 'r') as fh:
+                    file_content = ''.join(fh.readlines())
+
+                module_version_file = ModuleVersionFile.create(module_version=self._module_version, path=file_name)
+                module_version_file.update_attributes(content=file_content)
+
     def _generate_archive(self):
         """Generate archive of extracted module"""
         # Create tar.gz
@@ -162,14 +323,15 @@ class ModuleExtractor:
             'zip',
             self.extract_directory)
 
-    def _create_module_details(self, readme_content, terraform_docs, tfsec, infracost=None):
+    def _create_module_details(self, readme_content, terraform_docs, tfsec, terraform_graph, infracost=None):
         """Create module details row."""
         module_details = ModuleDetails.create()
         module_details.update_attributes(
             readme_content=readme_content,
             terraform_docs=json.dumps(terraform_docs),
             tfsec=json.dumps(tfsec),
-            infracost=json.dumps(infracost) if infracost else None
+            infracost=json.dumps(infracost) if infracost else None,
+            terraform_graph=terraform_graph
         )
         return module_details
 
@@ -179,15 +341,17 @@ class ModuleExtractor:
         readme_content: str,
         terraform_docs: dict,
         tfsec: dict,
-        terrareg_metadata: dict) -> int:
+        terrareg_metadata: dict,
+        terraform_graph: str) -> int:
         """Insert module into DB, overwrite any pre-existing"""
         # Create module details row
         module_details = self._create_module_details(
             terraform_docs=terraform_docs,
             readme_content=readme_content,
-            tfsec=tfsec
+            tfsec=tfsec,
+            terraform_graph=terraform_graph
         )
-        
+
         # Update attributes of module_version in database
         self._module_version.update_attributes(
             module_details_id=module_details.pk,
@@ -202,16 +366,29 @@ class ModuleExtractor:
             repo_base_url_template=terrareg_metadata.get('repo_base_url', None),
             variable_template=json.dumps(terrareg_metadata.get('variable_template', {})),
             published=Config().AUTO_PUBLISH_MODULE_VERSIONS,
-            internal=terrareg_metadata.get('internal', False)
+            internal=terrareg_metadata.get('internal', False),
+            extraction_version=EXTRACTION_VERSION
         )
 
     def _process_submodule(self, submodule: BaseSubmodule):
         """Process submodule."""
         submodule_dir = safe_join_paths(self.module_directory, submodule.path)
 
+        # Extract example files before performing
+        # any other analysis, as the analysis may modify
+        # files in the repository, which should not
+        # be present in the stored files in the database
+        if isinstance(submodule, Example):
+            self._extract_example_files(example=submodule)
+
         tf_docs = self._run_terraform_docs(submodule_dir)
         tfsec = self._run_tfsec(submodule_dir)
         readme_content = self._get_readme_content(submodule_dir)
+
+        terraform_graph = None
+        with self._switch_terraform_versions(submodule_dir):
+            if self._run_tf_init(submodule_dir):
+                terraform_graph = self._get_graph_data(submodule_dir)
 
         infracost = None
         # Run infracost on examples, if API key is set
@@ -226,15 +403,13 @@ class ModuleExtractor:
             terraform_docs=tf_docs,
             readme_content=readme_content,
             tfsec=tfsec,
-            infracost=infracost
+            infracost=infracost,
+            terraform_graph=terraform_graph
         )
 
         submodule.update_attributes(
             module_details_id=module_details.pk
         )
-
-        if isinstance(submodule, Example):
-            self._extract_example_files(example=submodule)
 
     def _run_infracost(self, example: Example):
         """Run infracost to obtain cost of examples."""
@@ -242,9 +417,10 @@ class ModuleExtractor:
         safe_join_paths(self.module_directory, example.path)
 
         infracost_env = dict(os.environ)
-        if Config().DOMAIN_NAME:
-            infracost_env['INFRACOST_TERRAFORM_CLOUD_TOKEN'] = Config()._INTERNAL_EXTRACTION_ANALYITCS_TOKEN
-            infracost_env['INFRACOST_TERRAFORM_CLOUD_HOST'] = Config().DOMAIN_NAME
+        _, domain_name, _ = get_public_url_details()
+        if domain_name:
+            infracost_env['INFRACOST_TERRAFORM_CLOUD_TOKEN'] = Config().INTERNAL_EXTRACTION_ANALYITCS_TOKEN
+            infracost_env['INFRACOST_TERRAFORM_CLOUD_HOST'] = domain_name
 
         # Create temporary file safely and immediately close to
         # pass path to infracost
@@ -258,7 +434,10 @@ class ModuleExtractor:
                     env=infracost_env
                 )
             except subprocess.CalledProcessError as exc:
-                raise UnableToProcessTerraformError('An error occurred whilst performing cost analysis of code.')
+                raise UnableToProcessTerraformError(
+                    'An error occurred whilst performing cost analysis of code.' +
+                    (f": {str(exc)}: {exc.output.decode('utf-8')}" if Config().DEBUG else "")
+                )
 
             with open(output_file.name, 'r') as output_file_fh:
                 infracost_result = json.load(output_file_fh)
@@ -389,7 +568,7 @@ class ModuleExtractor:
                     # Otherwise, break from iterations
                     break
                 extracted_description = new_description
-         
+
             return extracted_description if extracted_description else None
 
         return None
@@ -400,6 +579,11 @@ class ModuleExtractor:
         terraform_docs = self._run_terraform_docs(self.module_directory)
         tfsec = self._run_tfsec(self.module_directory)
         readme_content = self._get_readme_content(self.module_directory)
+
+        terraform_graph = None
+        with self._switch_terraform_versions(self.module_directory):
+            if self._run_tf_init(self.module_directory):
+                terraform_graph = self._get_graph_data(self.module_directory)
 
         # Check for any terrareg metadata files
         terrareg_metadata = self._get_terrareg_metadata(self.module_directory)
@@ -415,7 +599,8 @@ class ModuleExtractor:
             readme_content=readme_content,
             tfsec=tfsec,
             terraform_docs=terraform_docs,
-            terrareg_metadata=terrareg_metadata
+            terrareg_metadata=terrareg_metadata,
+            terraform_graph=terraform_graph
         )
 
         # Generate the archive, unless the module has a git clone URL and
@@ -423,6 +608,8 @@ class ModuleExtractor:
         if not (self._module_version.get_git_clone_url() and
                 Config().DELETE_EXTERNALLY_HOSTED_ARTIFACTS):
             self._generate_archive()
+
+        self._extract_additional_tab_files()
 
         self._scan_submodules(
             submodule_class=Submodule,
@@ -466,6 +653,8 @@ class ApiUploadModuleExtractor(ModuleExtractor):
     def _extract_archive(self):
         """Extract uploaded archive into extract directory."""
         with zipfile.ZipFile(self.source_file, 'r') as zip_ref:
+            for name in zip_ref.namelist():
+                safe_join_paths(self.extract_directory, name)
             zip_ref.extractall(self.extract_directory)
 
     def process_upload(self):
@@ -504,13 +693,16 @@ class GitModuleExtractor(ModuleExtractor):
                     self.extract_directory
                 ],
                 stderr=subprocess.STDOUT,
-                env=env
+                env=env,
+                timeout=Config().GIT_CLONE_TIMEOUT
             )
         except subprocess.CalledProcessError as exc:
             error = 'Unknown error occurred during git clone'
-            for line in exc.output.decode('ascii').split('\n'):
+            for line in exc.output.decode('utf-8').split('\n'):
                 if line.startswith('fatal:'):
                     error = 'Error occurred during git clone: {}'.format(line)
+            if Config().DEBUG:
+                error += f'\n{str(exc)}\n{exc.output.decode("utf-8")}'
             raise GitCloneError(error)
 
     def process_upload(self):

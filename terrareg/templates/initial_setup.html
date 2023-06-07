@@ -45,7 +45,7 @@
                     The following environment variables must be setup to be able to login:
                     <ul>
                         <li id="setup-step-auth-vars-admin-authentication-token">
-                            <code>ADMIN_AUTHENTICATION_TOKEN</code> - Token to use for authorisation to be able to modify modules in the user interface.
+                            <code>ADMIN_AUTHENTICATION_TOKEN</code> - Token to use for authorisation to be able to modify modules in the user interface. Alternatively configure SAML2 or OpenID Connect (see <a target="blank" href="https://gitlab.dockstudios.co.uk/pub/terrareg/-/blob/main/README.md">README.md</a> for more information).
                         </li>
                         <li id="setup-step-auth-vars-secret-key">
                             <code>SECRET_KEY</code> - Key used for encrypting sessions. Can be generated using: <code>python -c 'import secrets; print(secrets.token_hex())'</code>
@@ -77,11 +77,10 @@
             </div>
         </div>
 
-
-        <div id="setup-create-module" class="card initial-setup-card">
+        <div id="setup-create-namespace" class="card initial-setup-card">
             <header class="card-header" onclick="onSetupCardHeaderClick(event)">
                 <p class="card-header-title">
-                    3. Create a module
+                    3. Create a namespace
                 </p>
                 <button class="card-header-icon" aria-label="more options">
                     <span class="icon">
@@ -91,7 +90,29 @@
             </header>
             <div class="card-content">
                 <div class="content">
-                    Go to the <a href="/create-module">create module page</a> and fill out the details for the module.<br /><br />
+                    Go to the <a  href="/create-namespace?initial_setup=1">create namespace page</a> and fill out the details for the namespace.<br /><br />
+
+                    Once completed, return back to this page and refresh.
+                </div>
+            </div>
+        </div>
+
+        <div id="setup-create-module" class="card initial-setup-card">
+            <header class="card-header" onclick="onSetupCardHeaderClick(event)">
+                <p class="card-header-title">
+                    4. Create a module
+                </p>
+                <button class="card-header-icon" aria-label="more options">
+                    <span class="icon">
+                        <i class="fas fa-angle-down" aria-hidden="true"></i>
+                    </span>
+                </button>
+            </header>
+            <div class="card-content">
+                <div class="content">
+                    Go to the <a href="/create-module?initial_setup=1">create module page</a> and fill out the details for the module.<br /><br />
+
+                    Once completed, return back to this page and refresh.
                 </div>
             </div>
         </div>
@@ -99,7 +120,7 @@
         <div id="setup-index-git" class="card initial-setup-card">
             <header class="card-header" onclick="onSetupCardHeaderClick(event)">
                 <p class="card-header-title">
-                    4a. Index a module version from Git
+                    5a. Index a module version from Git
                 </p>
                 <button class="card-header-icon" aria-label="more options">
                     <span class="icon">
@@ -122,7 +143,7 @@
         <div id="setup-index-upload" class="card initial-setup-card">
             <header class="card-header" onclick="onSetupCardHeaderClick(event)">
                 <p class="card-header-title">
-                    4b. Upload a version of the module
+                    5b. Upload a version of the module
                 </p>
                 <button id="setup-upload-module-tab-button" class="card-header-icon" aria-label="more options">
                     <span class="icon">
@@ -134,7 +155,7 @@
                 <div class="content">
                     <ol>
                         <li class="setup-step-upload-module-version">
-                            Create a zip/tar.gz archive with the contents of the terraform module
+                            Create a zip/tar.gz archive with the contents of the Terraform module
                         </li>
                         <li class="setup-step-upload-module-version">
                             Upload the module by performing a POST request to the upload endpoint: <code class="module-upload-endpoint"></code><br />
@@ -148,17 +169,17 @@
                     <pre id="setup-step-upload-module-version-example-command">
 # Zip module
 cd path/to/module
-zip * ../module.zip
+zip -r ../module.zip *
 
 version=1.0.0
 
 # Upload module version
-curl -X POST \
+curl -X POST <span class="module-upload-api-key-header-argument"></span>\
     "<span class="module-upload-endpoint"></span>" \
     -F file=@../module.zip
 
 # Publish module version
-curl -X POST \
+curl -X POST <span class="module-publish-api-key-header-argument"></span>\
     "<span class="module-publish-endpoint"></span>"</pre>
                 </div>
             </div>
@@ -168,7 +189,7 @@ curl -X POST \
         <div id="setup-secure" class="card initial-setup-card">
             <header class="card-header" onclick="onSetupCardHeaderClick(event)">
                 <p class="card-header-title">
-                    5. Secure your Terrareg instance
+                    6. Secure your Terrareg instance
                 </p>
                 <button class="card-header-icon" aria-label="more options">
                     <span class="icon">
@@ -182,6 +203,9 @@ curl -X POST \
                     <ul>
                         <li id="setup-step-secure-upload"><code>UPLOAD_API_KEYS</code> or <code>ALLOW_MODULE_HOSTING</code> - Either setup API keys for liming access to the module version upload endpoint or disable uploading modules entirely, enforcing the use of indexing from a Git repository</li>
                         <li id="setup-step-secure-publish"><code>PUBLISH_API_KEYS</code> - Setup API keys for limiting access to the module version publishing endpoint</li>
+                        <li id="setup-step-secure-auto-create-namespace"><code>AUTO_CREATE_NAMESPACE</code> - Disable auto-creation of namespaces when uploading a module, enforcing creation of namespaces by authenticated users</li>
+                        <li id="setup-step-secure-auto-create-module-provider"><code>AUTO_CREATE_MODULE_PROVIDER</code> - Disable auto-creation of module providers when uploading a module, enforcing creation of modules/module providers by authenticated users</li>
+                        
                     </ul>
                 </div>
             </div>
@@ -191,7 +215,7 @@ curl -X POST \
         <div id="setup-ssl" class="card initial-setup-card">
             <header class="card-header" onclick="onSetupCardHeaderClick(event)">
                 <p class="card-header-title">
-                    6. Enable SSL
+                    7. Enable SSL
                 </p>
                 <button class="card-header-icon" aria-label="more options">
                     <span class="icon">

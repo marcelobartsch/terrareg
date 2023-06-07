@@ -3,8 +3,7 @@ from unittest import mock
 
 import pytest
 from test.unit.terrareg import (
-    MockModuleProvider, MockModule, MockNamespace,
-    mocked_server_namespace_fixture,
+    mock_models,
     setup_test_data, TerraregUnitTest
 )
 from test import client
@@ -14,7 +13,7 @@ class TestApiTerraregNamespaceModules(TerraregUnitTest):
     """Test ApiTerraregNamespaceModules resource."""
 
     @setup_test_data()
-    def test_existing_namespace_with_mixed_modules(self, client, mocked_server_namespace_fixture):
+    def test_existing_namespace_with_mixed_modules(self, client, mock_models):
         res = client.get('/v1/terrareg/modules/smallernamespacelist')
 
         assert res.json == {
@@ -87,7 +86,7 @@ class TestApiTerraregNamespaceModules(TerraregUnitTest):
 
         assert res.status_code == 200
 
-    def test_non_existent_namespace(self, client, mocked_server_namespace_fixture):
+    def test_non_existent_namespace(self, client, mock_models):
         """Test endpoint with non-existent module"""
 
         res = client.get('/v1/terrareg/modules/doesnotexist')
@@ -96,23 +95,25 @@ class TestApiTerraregNamespaceModules(TerraregUnitTest):
         assert res.status_code == 404
 
     @setup_test_data()
-    def test_analytics_token_not_converted(self, client, mocked_server_namespace_fixture):
+    def test_namespace_with_no_modules(self, client, mock_models):
+        """Test endpoint with namespace with no modules"""
+
+        res = client.get('/v1/terrareg/modules/emptynamespace')
+
+        assert res.json == res.json == {
+            'meta': {
+                'current_offset': 0,
+                'limit': 10
+            },
+            'modules': []
+        }
+        assert res.status_code == 200
+
+    @setup_test_data()
+    def test_analytics_token_not_converted(self, client, mock_models):
         """Test endpoint with analytics token and ensure it doesn't convert the analytics token."""
 
-        res = client.get('/v1/terrareg/modules/test_token-name__testnamespace/testmodulename/testprovider')
+        res = client.get('/v1/terrareg/modules/test_token-name__testnamespace')
 
         assert res.json == {'errors': ['Not Found']}
         assert res.status_code == 404
-
-    @setup_test_data()
-    def test_matches_terrareg_api_details_function(self, client, mocked_server_namespace_fixture):
-        """Test endpoint with analytics token"""
-
-        res = client.get('/v1/terrareg/modules/testnamespace/testmodulename/testprovider')
-
-        test_namespace = MockNamespace(name='testnamespace')
-        test_module = MockModule(namespace=test_namespace, name='testmodulename')
-        test_module_provider = MockModuleProvider(module=test_module, name='testprovider')
-
-        assert res.json == test_module_provider.get_latest_version().get_terrareg_api_details()
-        assert res.status_code == 200

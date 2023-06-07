@@ -3,15 +3,33 @@
 <html>
     <head>
         <meta charset="utf-8">
-        <link rel="stylesheet" href="/static/css/bulma/bulma-0.9.3.min.css">
+
+        <link rel="stylesheet" href="{{ theme_path }}" />
+
+        <script src="/static/js/terrareg/user-preferences.js"></script>
+
         <script defer src="/static/js/fontawesome/all-v6.0.0.js"></script>
         <script src="/static/js/jquery/jquery-6.3.0.min.js"></script>
+        <script src="/static/js/jquery/jquery.cookie-1.4.1.js"></script>
 
         <!-- Data tables -->
         <link rel="stylesheet" href="/static/css/datatables/dataTables.bulma-1.11.5.min.css" />
-        <script src="/static/js/datatables/jquery.dataTables-1.11.5.min.js"></script>
+        <!-- <script src="/static/js/datatables/jquery.dataTables-1.11.5.min.js"></script> -->
+        <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.js" ></script>
         <script src="/static/js/datatables/dataTables.bulma-1.11.5.min.js"></script>
 
+        <link rel="stylesheet" href="/static/css/datatables/responsive.bulma-2.3.0.min.css" />
+        <script src="/static/js/datatables/dataTables.responsive-2.3.0.min.js"></script>
+        <script src="/static/js/datatables/responsive.bulma-2.3.0.min.js"></script>
+        <script src="/static/js/datatables/full_numbers_no_ellipses.js"></script>
+        
+        <link rel="stylesheet" type="text/css" href="/static/css/datatables/rowGroup.bulma-1.2.0.min.css"/>
+        <script type="text/javascript" src="/static/js/datatables/dataTables.rowGroup-1.2.0.min.js"></script>
+
+        
+        <link rel="stylesheet" type="text/css" href="/static/css/datatables/buttons.dataTables-2.2.3.min.css">
+        <script src="/static/js/datatables/dataTables.buttons-2.2.3.min.js"></script>
+        
         <!-- Navigo router -->
         <script src="/static/js/navigo/navigo-8.11.1.min.js"></script>
 
@@ -44,9 +62,27 @@
             if (loggedIn) {
               $('#navbar_login_link').attr('href', '/logout');
               $('#navbar_login_icon').removeClass('fa-lock');
-              $('#navbar_login_icon').addClass('fa-sign-out');
+              $('#navbar_login_icon').addClass('fa-right-from-bracket');
               $('#navbar_login_span').html('Logout');
-              $('#navbarCreateDropdown').css('display', 'flex');
+
+              let showCreateModule = false;
+              if (loggedIn.site_admin) {
+                // Show settings drop-down
+                $('#navbarSettingsDropdown').css('display', 'flex');
+
+                // Show create namespace button
+                $('#navbarCreateNamespaceButton').css('display', 'block');
+
+                showCreateModule = true;
+              } else if (Object.values(loggedIn.namespace_permissions).indexOf('FULL') !== -1) {
+                showCreateModule = true;
+              }
+              if (showCreateModule) {
+                // Show create drop-down
+                $('#navbarCreateDropdown').css('display', 'flex');
+                // Show create module button
+                $('#navbarCreateModuleButton').css('display', 'block');
+              }
             }
           }
 
@@ -62,7 +98,7 @@
           }
         </style>
 
-        <title>{% block title %}{% endblock %} - Terrareg</title>
+	<title>{% block title %}{% endblock %} - {{ terrareg_application_name }}</title>
 
         {% block header %}{% endblock %}
     </head>
@@ -95,7 +131,16 @@
                 <div style="display: none;" id="navbarCreateDropdown" class="navbar-item has-dropdown is-hoverable">
                   <a class="navbar-link" href="#">Create</a>
                   <div class="navbar-dropdown is-boxed">
-                    <a class="navbar-item" href="/create-module">Module</a>
+                    <a id="navbarCreateNamespaceButton" style="display: none;" class="navbar-item" href="/create-namespace">Namespace</a>
+                    <a id="navbarCreateModuleButton" style="display: none;" class="navbar-item" href="/create-module">Module</a>
+                  </div>
+                </div>
+
+                <div style="display: none;" id="navbarSettingsDropdown" class="navbar-item has-dropdown is-hoverable">
+                  <a class="navbar-link" href="#">Settings</a>
+                  <div class="navbar-dropdown is-boxed">
+                    <a id="navbarUserGroupsButton" class="navbar-item" href="/user-groups">User Groups</a>
+                    <a id="navbarAuditHistoryButton" class="navbar-item" href="/audit-history">Audit History</a>
                   </div>
                 </div>
 
@@ -131,6 +176,19 @@
                 <div class="navbar-item">
                   <div class="field is-grouped">
                     <p class="control">
+                      <a id="navbar-user-preferences-link" class="button is-primary" onclick="userPreferencesModalShow();">
+                      <span class="icon">
+                        <i id="navbar-user-preferences" class="fa fa-gear"></i>
+                      </span>
+                      <span id="navbar-user-preferences-span">Preferences</span>
+                    </a>
+                    </p>
+                  </div>
+                </div>
+
+                <div class="navbar-item">
+                  <div class="field is-grouped">
+                    <p class="control">
                       <a id="navbar_login_link" class="button is-primary" href="/login">
                       <span class="icon">
                         <i id="navbar_login_icon" class="fa fa-sign-in"></i>
@@ -152,6 +210,7 @@
 
         </section>
 
+        {% block footer %}
         <footer class="footer">
           <div class="content has-text-centered">
             <p>
@@ -163,6 +222,59 @@
             {% block additional_footer %}{% endblock %}
           </div>
         </footer>
+        {% endblock %}
+
+
+        <!-- User preferences modal -->
+        <div id="user-preferences-modal" class="modal">
+          <div class="modal-background" onclick="userPreferencesModalClose();"></div>
+        
+          <div class="modal-content">
+            <div class="box">
+              <p>User Preferences</p>
+              <br />
+
+              <div class="field">
+                <label class="label"><input id="user-preferences-show-beta" class="checkbox" type="checkbox" /> Show 'beta' versions</label>
+              </div>
+
+              <div class="field">
+                <label class="label"><input id="user-preferences-show-unpublished" class="checkbox" type="checkbox" /> Show 'unpublished' versions</label>
+              </div>
+
+              <div class="field">
+                <label class="label">
+                  Terraform Version for compatibility checks
+                  <input id="user-preferences-terraform-compatibility-version" class="input" type="text" placeholder="1.3.0" />
+                </label>
+              </div>
+
+              <div class="field">
+                <label class="label">
+                  Theme
+                </label>
+                <div class="select is-small">
+                  <select id="user-preferences-theme">
+                    <option value="default">Default</option>
+                    <option value="lux">Lux</option>
+                    <option value="pulse">Pulse</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                Note: The current page is reloaded when preferences are saved.
+              </div>
+              <br />
+
+              <button class="button" aria-label="close" onclick="userPreferencesModalSave();">Save</button>
+              <button class="button" aria-label="close" onclick="userPreferencesModalClose();">Close</button>
+            </div>
+          </div>
+        
+          <button class="modal-close is-large" aria-label="close" onclick="userPreferencesModalClose();"></button>
+        </div>
+        <!-- !User preferences modal -->
 
     </body>
 </html>

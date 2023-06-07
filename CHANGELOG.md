@@ -1,5 +1,670 @@
 # Changelog
 
+# [2.69.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.68.3...v2.69.0) (2023-06-05)
+
+
+### Features
+
+* Add support for two character namespace/module names. ([3a32e73](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/3a32e736e9d63bfa80835200d41901a436f50fd7)), closes [#397](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/397)
+
+## [2.68.3](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.68.2...v2.68.3) (2023-06-02)
+
+
+### Bug Fixes
+
+* Fix handling of terraform provider block with content before the block in the file. ([40b258c](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/40b258c93fb3d89ef38845ca263fede1518d0a2e)), closes [#395](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/395)
+
+## [2.68.2](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.68.1...v2.68.2) (2023-06-02)
+
+
+### Bug Fixes
+
+* Attempt to find find terraform files with backend configuration and create override file during extraction. ([be76ec8](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/be76ec8b074ee52cb00124077a599fd70a8ff984)), closes [#395](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/395)
+
+## [2.68.1](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.68.0...v2.68.1) (2023-06-01)
+
+
+### Bug Fixes
+
+* Disable backend when initialising terraform ([8198b3c](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/8198b3c58b86312839648d6a4dc191fdfa2c04b1)), closes [#395](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/395)
+
+# [2.68.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.67.0...v2.68.0) (2023-05-09)
+
+
+### Features
+
+* Add target_terraform_version arguments to terrareg module provider/module version details API endpoints, which add version compatibility to the response ([975bbdc](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/975bbdce8a03a358f1546303893de2f1282e9fff)), closes [#295](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/295)
+* Add Terraform constraint version to user preferences and update module search version constraint to get/set the user preference value ([b6a9c62](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/b6a9c62658b1137c1e099cf9ad91ca31d5d7eb9c)), closes [#295](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/295)
+* Display Terraform compatibility result on module provider page ([368545d](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/368545d2d1b48d6726a769d7a2c0856e098e7fb2)), closes [#295](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/295)
+* Show module compatibility with selected Terraform version in module search ([67c2f84](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/67c2f843c305b7432573d7f5560017cc20cc4c23)), closes [#295](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/295)
+
+# [2.67.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.66.4...v2.67.0) (2023-04-25)
+
+
+### Bug Fixes
+
+* Populate "dependencies" attribute in API response, with a list of external module dependencies ([05553e8](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/05553e8583f6a823abce542381d1994f232f296f)), closes [#386](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/386)
+* Remove html sanitisation of provider version to remove HTML entities from API response. ([1832b04](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/1832b04c6ad8b65b439ca6879e19f698d881fb8b)), closes [#385](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/385)
+
+
+### Features
+
+* Add tab to module provider page detailing modules called by current module ([f727a48](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/f727a486d6a5a2f08306a6acf23d178a24ec734e)), closes [#139](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/139)
+* Display module calls in submodule/example pages ([17f1649](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/17f1649a4ab4341fada40c1e73f6c3fb4d497f68)), closes [#139](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/139)
+
+## [2.66.4](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.66.3...v2.66.4) (2023-04-24)
+
+
+### Bug Fixes
+
+* Stop terraform graph failures from causing module extraction to fail ([0db5c8e](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/0db5c8ea4e77fe97de0348fb02919e19d99a003c)), closes [#380](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/380)
+
+## [2.66.3](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.66.2...v2.66.3) (2023-04-21)
+
+
+### Bug Fixes
+
+* Hide 'Settings' tab from module provider page when user does not have write permission to the namespace ([5c9936b](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/5c9936b58198fa3b512670e7c07cd4d43c071899)), closes [#369](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/369)
+
+## [2.66.2](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.66.1...v2.66.2) (2023-04-03)
+
+
+### Bug Fixes
+
+* Allow overriding of OpenID connect requested scopes. ([d8a1a9c](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/d8a1a9c16fef5a62bbd28bc8b2279a48809ac8a9)), closes [#365](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/365)
+
+## [2.66.1](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.66.0...v2.66.1) (2023-03-28)
+
+
+### Bug Fixes
+
+* Reload current page when any user preferences are changed ([e911aa8](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/e911aa878897526d06dde4c8ad0de96f77d08d7b)), closes [#376](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/376)
+* Reload current page when preferences are saved after the theme is changed ([de5510a](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/de5510aa1c61c59124eef6cd62ec9c5d54683530)), closes [#376](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/376)
+* Update cookie set when selecting theme to specify a path, rather than the default, which is the user's current path ([6392aad](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/6392aad7bff5fe537c5b0df3027f138d8062f564)), closes [#375](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/375)
+
+# [2.66.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.65.0...v2.66.0) (2023-03-27)
+
+
+### Bug Fixes
+
+* Fix bug where hostname in example replacement contains port of request. ([5690487](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/5690487ec1b1d9f6186965e7975f2ed42fd1db41)), closes [#372](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/372) [#347](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/347) [#348](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/348)
+
+
+### Features
+
+* Add config to disable analytics tokens entirely ([968cccb](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/968cccba562ad4bd6c0132baea525c580d348d2d)), closes [#372](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/372)
+* Disable analytics tab in module provider page when analytics are disabled ([3da61e7](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/3da61e77429f0ac31ea28b1a388b1de37c679e81)), closes [#372](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/372)
+* Disable analytics token in usage builder when analaytics is disabled globally ([b7a437d](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/b7a437d4c629a0f06e8aebcef69a5653c80592fd)), closes [#372](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/372)
+* Update example usage and Terraform replaced in README/example files to no longer show analytics token is DISABLE_ANALYTICS is set ([9d09253](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/9d09253f6d97158ed9e27219e7c5e9428fb837d9)), closes [#372](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/372)
+* Update module version download to ignore analytics tokens if DISABLE_ANALYTICS is set ([fa7e4ee](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/fa7e4ee37765482b3ab3b2401c8302e5579d4604)), closes [#372](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/372)
+
+# [2.65.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.64.0...v2.65.0) (2023-03-25)
+
+
+### Bug Fixes
+
+* Add initial sorting of security issues by filename. This is usually the default outcome of the tfsec output, but test data did not include it. ([6eaf023](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/6eaf0232e117e02a8a95f1690020e7edc8258a20)), closes [#371](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/371)
+
+
+### Features
+
+* Show highest severity security issue in security issue badge. ([232b1a9](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/232b1a9b29b4b0e15fcf0e602a7e6d6b4178c90e)), closes [#320](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/320)
+* Update security issues label to show breakdown of severities ([e3392e0](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/e3392e0acb7324566f005b9378be1d6a4fcc34f0)), closes [#320](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/320)
+
+# [2.64.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.63.0...v2.64.0) (2023-03-24)
+
+
+### Features
+
+* Add support for external images in README and custom markdown tabs. ([4ed384f](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/4ed384f40a96b512e138ba7e50986a3506f2b9ff)), closes [#370](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/370)
+
+# [2.63.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.62.3...v2.63.0) (2023-03-23)
+
+
+### Bug Fixes
+
+* Perform HTML sanitisation after conversion of markdown to HTML ([1132e24](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/1132e242562d9666171dc9c260c6ad68182bcc6b)), closes [#300](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/300)
+
+
+### Features
+
+* Add support for links to heading anchors in README/markdown tabs ([d2d6ea4](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/d2d6ea48ca3ad1b38c7a2dbb1252bd1e69c2fc86)), closes [#300](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/300)
+* Automatically select tab containing anchor link in module provider page ([014dc9b](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/014dc9ba340bb1561116fe60e2c5430ad8b0d70f)), closes [#300](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/300)
+
+## [2.62.3](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.62.2...v2.62.3) (2023-03-22)
+
+
+### Bug Fixes
+
+* Fix error when performing terraform init, which tries to use non-existent .terraform.d/plugin-cache directory. ([19213ee](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/19213ee4c23758316a83f0dc4657dd96d32d5d6f)), closes [#364](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/364)
+
+## [2.62.2](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.62.1...v2.62.2) (2023-03-22)
+
+
+### Bug Fixes
+
+* Add catching of errors due to invalid placeholder in repo base URL. ([0119b36](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/0119b369406fa4e85650664e4aa748463ecb0dbb)), closes [#360](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/360)
+* Add handling of invalid placeholder in repo browse URL template. ([e4d9cd1](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/e4d9cd17e0f2e6dddc53a801f6e246ad66452360)), closes [#360](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/360)
+* Add validation of port in git clone URL, ensuring that if it exists, it's a valid port. ([dbcf808](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/dbcf808da5a296cfc787589950240e64909e6e2f)), closes [#360](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/360)
+* Catch errors caused by invalid template placeholders in git clone URL. ([d522b23](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/d522b239e2b078504ef4a6a0a814d28adde6ac6b)), closes [#360](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/360)
+* Update examples of SSH git clone URLs to use forward slash delimeter after domain, rathern than colon ([74c055d](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/74c055de7ea7fae6a922bab9edaddca95de05daf)), closes [#360](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/360)
+
+## [2.62.1](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.62.0...v2.62.1) (2023-03-22)
+
+
+### Bug Fixes
+
+* Fix tfswitch when using Dockerfile ([7fcda64](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/7fcda64e3f345f47481059e5080a818406725c6f)), closes [#356](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/356)
+* Show command output when command errors with debug mode enables ([82d7197](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/82d7197cb69e2c470157e2e07e4cd7121de48284)), closes [#356](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/356)
+* Update module extraction methods to return exception details when DEBUG is enabled ([3c2dbdb](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/3c2dbdb58235e6d70b604734e6981a7be9763608)), closes [#356](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/356)
+
+# [2.62.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.61.1...v2.62.0) (2023-03-21)
+
+
+### Features
+
+* Add example syntax highlighting ([c63ef25](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/c63ef252f5d93196dbead899befe4525327ba5c8)), closes [#304](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/304)
+* Handle syntax highlighting of READMEs ([f49455d](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/f49455dc4378198ffb2eb7f51469a2545e201f95)), closes [#304](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/304)
+
+## [2.61.1](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.61.0...v2.61.1) (2023-03-21)
+
+
+### Bug Fixes
+
+* Update initial setup to display commands to use API key when uploading/publishing module, if the API keys are set ([454e036](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/454e036c1c217ec02bcb0aa2b6005dce8327c73d)), closes [#351](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/351)
+* Update upload_module script to support environment variables for setting upload/publish API keys ([8861214](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/8861214f3fe03f01af5b67af161831ff12a6709e)), closes [#351](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/351)
+
+# [2.61.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.60.2...v2.61.0) (2023-03-17)
+
+
+### Bug Fixes
+
+* Add new 'PUBLIC_URL' config which is the source of protocol, domain and port used for end-user communication ([79baa0f](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/79baa0f5a8178623a66dc25cd40a3c4eb7a09302)), closes [#347](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/347)
+* Add port to usage example if port is a non-standard port ([5c3c024](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/5c3c02429ed50e80d226f216d24f4c93a2ce321f)), closes [#348](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/348)
+
+
+### Features
+
+* Add support for using /modules/ endpoint in terraform, allowing the use of the registry without HTTPS ([4a3e3a2](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/4a3e3a2454c5c698c2c517c9f22f9b197fdd5af8)), closes [#347](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/347)
+* Update usage example in module provider page to display "source" url with http download URL, if https is not being used ([b06d562](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/b06d56252cc3f925f0f2ff152ac63490baf946f7)), closes [#347](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/347)
+* Use new http-accessible source URL in example files and README terraform. ([4a2f0b4](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/4a2f0b484fa65eceada854d77ca129e282b10215)), closes [#347](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/347) [#349](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/349)
+
+## [2.60.2](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.60.1...v2.60.2) (2023-03-15)
+
+
+### Bug Fixes
+
+* Add default value to git tag format field in module provider create page. ([fc516b9](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/fc516b9d495e81a026073f86c45cf441f8dd6409)), closes [#311](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/311)
+
+## [2.60.1](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.60.0...v2.60.1) (2023-03-14)
+
+
+### Bug Fixes
+
+* Update namespace module list endpoint to return empty module list rather than 404 when a namespace has no modules ([6ca3441](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/6ca3441f309c52d89ff8fe0f36e1c6da851cc8ea)), closes [#328](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/328)
+* Update namespace page to display error about no modules when a namespace exists, rather than an eror that the namespace does not exist. ([ec0b3c9](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/ec0b3c9d362e8c3fa39a10d33f87199546270a8f)), closes [#328](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/328)
+
+# [2.60.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.59.5...v2.60.0) (2023-03-14)
+
+
+### Features
+
+* Add support for 'latest' module provider download endpoint ([18f14e8](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/18f14e86cc6aa091f573f446a9d1f5428f14302d)), closes [#322](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/322)
+
+## [2.59.5](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.59.4...v2.59.5) (2023-03-14)
+
+
+### Bug Fixes
+
+* Add steps to initial setup to disable AUTO_CREATE_NAMESPACE and AUTO_CREATE_MODULE_PROVIDER ([f18398b](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/f18398b78b0485cbe02e01a19a6bf9b400cfafd3)), closes [#337](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/337)
+
+## [2.59.4](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.59.3...v2.59.4) (2023-03-14)
+
+
+### Bug Fixes
+
+* Disable autocreation of namespaces, modules and module providers in module provider details API endpoint ([e015a7f](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/e015a7f92248f533f436aeed933f49f05a44afb1)), closes [#338](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/338)
+
+## [2.59.3](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.59.2...v2.59.3) (2023-03-13)
+
+
+### Bug Fixes
+
+* Update unauthenticated/unpriviledged access to module upload/publish endpoints when API keys are not set and access controls are enabled ([0afc6a8](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/0afc6a8e1aee289c9705f8f6575465c47935a907)), closes [#339](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/339)
+
+## [2.59.2](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.59.1...v2.59.2) (2023-03-13)
+
+
+### Bug Fixes
+
+* Fallback to use openid connect user's email address, if username is not available ([c7e057a](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/c7e057a713ca12a7b5fd31a0641c4190d29ab176)), closes [#276](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/276)
+* Fix authentication using OpenID connect with Azure ([29bcb1d](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/29bcb1d5365cdebb1367be27c5e62cf75ec15ff3)), closes [#276](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/276)
+
+## [2.59.1](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.59.0...v2.59.1) (2023-03-11)
+
+
+### Bug Fixes
+
+* Disable validation of namespace name, allowing namespaces that have an invalid name to still be used. ([8443861](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/8443861bfe45bb0460a05c55b73313adf8980a6b)), closes [#330](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/330)
+* Disallow namespace names with double underscores ([fe694ef](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/fe694ef7db1359817b708cd999b58a873bacf949)), closes [#330](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/330)
+* Improve error message when namespace name is invalid, providing details of what is required for a valid name. ([400f6d1](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/400f6d11227b7e1339ba23f17a1a70f77e30a509)), closes [#330](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/330)
+* Update namespace endpoint to return 400 on invalid namespace name/display name and duplicate names ([85e0010](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/85e00108e1bc11dc3fe774f44f244e4b999f5145)), closes [#326](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/326)
+
+# [2.59.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.58.1...v2.59.0) (2023-03-10)
+
+
+### Features
+
+* Allow 'latest' in URLs instead of a specific version number. ([c347b03](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/c347b03ac72ac91ee8dfdd7fe28b711724fa9581)), closes [#333](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/333)
+
+## [2.58.1](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.58.0...v2.58.1) (2023-03-09)
+
+
+### Bug Fixes
+
+* Fix text color of text inputs in pulse theme ([81f3982](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/81f398218463e022227fcf312d70830c6cd80fef)), closes [#336](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/336)
+* Speed up page load and reduce content shift by rendering theme CSS path server-side ([6c96faf](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/6c96faff745bb1078bddc1961378110fe34d63d7)), closes [#336](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/336)
+
+# [2.58.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.57.0...v2.58.0) (2023-02-14)
+
+
+### Features
+
+* Add caching of terraform providers in terrareg container. ([bf050d7](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/bf050d74f79cbd36aaeedae3a934f59318af1180)), closes [#316](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/316)
+
+# [2.57.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.56.0...v2.57.0) (2023-01-31)
+
+
+### Features
+
+* Add sentry integration. ([6ea7e82](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/6ea7e825b25d23815411723bd7a6a209b8916b0a)), closes [#205](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/205)
+
+# [2.56.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.55.0...v2.56.0) (2023-01-30)
+
+
+### Features
+
+* Add provider logos for hashicorp products: vault, nomad, vagrant and consul ([81c9d8a](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/81c9d8ac4eca6f2de07b9eb93d5256162bb6f661))
+
+# [2.55.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.54.1...v2.55.0) (2023-01-30)
+
+
+### Bug Fixes
+
+* Add CSFR token validation to namespace create API ([bc68795](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/bc68795334f81dc60270a55057f0772e62541fb9)), closes [#325](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/325)
+* Fix exception thrown when attempting to create a namespace with a None name or without provide a name attribute ([4574778](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/457477845d01dbffee662e566078780c9700ed9c)), closes [#327](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/327)
+* Fix mis-aligned tags in create module provider page in description of templating for clone/browse URL templates ([83db99f](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/83db99f5d55f9ef5aa503ebfce652eacefcfcb1f)), closes [#329](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/329)
+
+
+### Features
+
+* Add support to add 'Display name' to namespace during creation. ([4ac011e](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/4ac011eb466890d0d9186ad0294d17b6e8f699aa)), closes [#294](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/294)
+* Display namespace "display name" in namespace list and module provider page breadcrumbs. ([8406815](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/8406815a47b393000ed53d74bac90bc4df9dbcb6)), closes [#294](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/294)
+
+## [2.54.1](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.54.0...v2.54.1) (2023-01-26)
+
+
+### Bug Fixes
+
+* Always show example cost to 2 decimal places ([9b73998](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/9b739982defcd9e85bbb9aab87e11fa77d452634)), closes [#324](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/324)
+* Fix bug with resource cost calculations where each iteration of a module in a for_each will overwrite the previous cost. ([a258775](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/a2587757a8f6dfe3bc47efad67882d07bfbf746b)), closes [#323](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/323)
+
+# [2.54.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.53.2...v2.54.0) (2023-01-23)
+
+
+### Bug Fixes
+
+* Update example usage to show pinned version for non-latest module versions ([c0b0a2f](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/c0b0a2f80cb99763cf89aae643156e82a18354aa)), closes [#301](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/301)
+
+
+### Features
+
+* Add comment above example file Terraform version string when using a beta/unpublished/non-latest version of a module ([51dde84](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/51dde844fd2ff3df4b38ae37b97eb1908e9c59f9)), closes [#317](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/317)
+* Update usage example to include Terraform comment above version if using a beta/unpublished/non-latest version ([8dc51b0](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/8dc51b0801f67a38aba7c792f4a6ba6803317a57)), closes [#317](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/317)
+
+## [2.53.2](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.53.1...v2.53.2) (2023-01-23)
+
+
+### Bug Fixes
+
+* Update links on module search results, module list and homepage module to direct to module provider page without a specific version ([9e2675d](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/9e2675d4f1e8bd996a149a6fb1e281bec7d3b676)), closes [#318](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/318)
+
+## [2.53.1](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.53.0...v2.53.1) (2023-01-22)
+
+
+### Bug Fixes
+
+* Add warning to module provider page when new features have been added that require a module version to be re-indexed ([416998c](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/416998cf0ec663ae3cdf04e865d541430c96453b)), closes [#314](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/314)
+
+# [2.53.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.52.1...v2.53.0) (2023-01-22)
+
+
+### Features
+
+* Add ability to configure mode when re-uploaded a previously uploaded module version. ([e7c9dc9](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/e7c9dc90779eff18e9509e39423471adc3961809)), closes [#299](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/299)
+* Retain publish state when re-indexing module version ([3fe6daa](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/3fe6daa7568b353fbefbe0819585b31d45f24dab)), closes [#299](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/299)
+
+## [2.52.1](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.52.0...v2.52.1) (2023-01-22)
+
+
+### Bug Fixes
+
+* Fix display of heredocs in example file content. ([a6358ba](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/a6358bae2130b245440fb271e6a75a1326f777ec)), closes [#310](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/310)
+
+# [2.52.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.51.0...v2.52.0) (2023-01-21)
+
+
+### Features
+
+* Add Terraform auth tokens that ignore the analytics token checks. ([1ba2dbc](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/1ba2dbc79750c9882cbc5595a59e9cf2e79ede6c)), closes [#244](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/244)
+
+# [2.51.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.50.0...v2.51.0) (2023-01-21)
+
+
+### Features
+
+* Add alternative themes with user preferences option to select theme. ([1be14ee](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/1be14ee7f9a0472b4c6621a4869ea3ac5cc1c6ce)), closes [#309](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/309)
+
+# [2.50.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.49.1...v2.50.0) (2023-01-20)
+
+
+### Bug Fixes
+
+* Add '--raw' and '--clean=false' to inframap to retain nodes that are being removed ([a0ee490](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/a0ee49059d397b6436ad7248e872cfb8b0e108c3)), closes [#286](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/286)
+* Add draft Terraform init command run before running inframap to make submodules available ([375f6ea](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/375f6ea7cf5c194f53a735df316fd25a7d2625be)), closes [#286](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/286)
+* Add red border to resources with costs in resource graph. ([7d1f3e9](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/7d1f3e9a56c14ea543c39172b40e8dae43e2df67)), closes [#286](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/286)
+* Implement management of terraformrc file to disable analytics generated from terraform during module extraction ([72e5970](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/72e597087edb93134aa0e5200980cdb99a40d918)), closes [#286](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/286)
+* Improve layout of graph by spreading out modules based on number of child resources. This is helped by disabling tiling ([f2c7036](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/f2c7036bb848490df23349e4b191a17ac6b82851)), closes [#286](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/286)
+* Update initial graph pan based on size of cy div height/width ([bab8f93](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/bab8f93e1ddaf32eabef8838a5f413a7bd9d3cc8)), closes [#286](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/286)
+* Update ModuleExtractor to use terraform graph and terraform-graph-beautifier to generate graph data and JSON ([afa4f65](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/afa4f65e6866956348a73645ac1bbda973f9b8e3)), closes [#286](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/286)
+
+
+### Features
+
+* Add graph options to show full resource and module names ([796db76](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/796db7682b1d9c3f5e14a16368d92b7f45fa4d70)), closes [#286](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/286)
+* Add page to view resource graph ([fe4129c](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/fe4129cacff8fffd65a6e1697a1cfe395880afbc)), closes [#286](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/286)
+* Add yearly costs to resources in graph view, where available ([f7689ba](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/f7689ba606d8bd06977a568ee6f7e39a861752dd)), closes [#286](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/286)
+
+
+### Reverts
+
+* Revert "ci: Update build_wheel step to use test docker image" ([93540a2](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/93540a2fb646baabf7ecf2173d06a4dbd5cbd689))
+* Revert "ci: Update wheel build to use python3/pip3, since the test container is based Ubuntu" ([c21b497](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/c21b49791af13722f9fad57270977a6ba13aaf3e))
+* Revert "ci: Add installation wheel package for building wheel inside test container" ([066ad26](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/066ad26c349037b91a897cde8e4169de6dcf318f))
+
+## [2.49.1](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.49.0...v2.49.1) (2023-01-14)
+
+
+### Bug Fixes
+
+* Add 'location' argument to all request parsers that expect arguments via query string ([36220b1](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/36220b129a869b742ca85b7359384dfba3ac43dc)), closes [#283](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/283)
+
+# [2.49.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.48.0...v2.49.0) (2023-01-13)
+
+
+### Bug Fixes
+
+* Do not show Terraform example usage panel in module provider page if module version has not been published. ([1fdc0ae](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/1fdc0ae749bb79f4f8ade7e30910ae25ccda7a55)), closes [#272](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/272)
+
+
+### Features
+
+* Add Terraform version constraint to module provider page. ([5d1e382](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/5d1e382de8b8778a757f2587e10ec3fc1e356769)), closes [#272](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/272)
+
+# [2.48.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.47.3...v2.48.0) (2022-12-31)
+
+
+### Features
+
+* Add ability to provide custom links on module provider pages ([3cfdd2b](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/3cfdd2be03a2d56d4918a8f4ddacc4ba6413576e)), closes [#275](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/275)
+
+## [2.47.3](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.47.2...v2.47.3) (2022-12-31)
+
+
+### Bug Fixes
+
+* Add warning to login page when no authentication methods are available ([170020d](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/170020db3d2f928baa6b1a3e0915be2a5fbdfc0a)), closes [#259](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/259)
+* Hide admin authentication login when admin token has not been configured. ([153def6](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/153def61679de1976ec04683e24a8e8ccf169bc1)), closes [#259](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/259)
+* Update initial setup process to automatically redirect user back to initial setup after creating a module ([7ae2608](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/7ae2608ba9914819f3c45c9b689f80ce55bd5088)), closes [#258](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/258)
+* Update initial setup process to automatically redirect user to initial-setup after creating a namespace ([05711ee](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/05711eeac344b97cce1271a3377b2f96930d0fd0)), closes [#258](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/258)
+* Update initial setup to check for any forms of authentication configured, rather than requiring admin token ([66c43f2](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/66c43f28c0e137d49cf589bf5c2f08f73090f46a)), closes [#258](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/258)
+
+## [2.47.2](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.47.1...v2.47.2) (2022-12-31)
+
+
+### Bug Fixes
+
+* Hide version text on module provider, by default and increase padding of labels ([de9e477](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/de9e477d5403334af85b95f9fe9df03938048879)), closes [#282](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/282)
+
+## [2.47.1](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.47.0...v2.47.1) (2022-12-16)
+
+
+### Bug Fixes
+
+* Fix display of < and > symbols in provider requirement version fields ([b10e9a3](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/b10e9a3cfc9e1ca7a7cd8cd0ec30600881077e66)), closes [#275](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/275)
+
+# [2.47.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.46.2...v2.47.0) (2022-12-16)
+
+
+### Features
+
+* Add audit event logging and audit history page ([9ed7222](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/9ed72226833a4546c98886cb3355ce356f8b53fc)), closes [#253](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/253)
+* Add audit events for create/delete namespaces, module providers and module versions ([97ed1a0](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/97ed1a0ca6675f268ef9da9926c00b4ebd9da276)), closes [#253](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/253)
+* Add audit events for logins ([b077ca5](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/b077ca5fee06a71d3e7f4aff2fbc1fed927e59ab)), closes [#253](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/253)
+* Add audit events for modifications to module provider configuration. ([67826e8](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/67826e8cda81330b9a127141fa8ad45610ced9b5)), closes [#253](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/253)
+* Create audit history page and API endpoint to return audit history ([0ce7156](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/0ce71562cf98d199abd19f8cec3fa7a5b67024bc)), closes [#253](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/253)
+* Implement audit log querying, limit+offset, sorting and ordering in API and datatable ([5132e46](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/5132e4615a1d272c345348d2f2ccc9bd3332cd78)), closes [#253](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/253)
+
+## [2.46.2](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.46.1...v2.46.2) (2022-12-12)
+
+
+### Bug Fixes
+
+* Update internal analaytics token to a config value, set by environment variable. ([3013b1b](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/3013b1b5190bf132c032f8507a1629e35e7801b4)), closes [#267](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/267)
+
+
+### Reverts
+
+* Revert "db: Add DB migration to handle deletion of erroneous analytics rows" ([6f44314](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/6f44314fd29963847f648e3c7b6488c89192d371))
+
+## [2.46.1](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.46.0...v2.46.1) (2022-12-11)
+
+
+### Bug Fixes
+
+* Move title for current submodule/example above name of module ([f026850](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/f02685065e07595d7969a65d75545bb13038ac6d)), closes [#224](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/224)
+
+# [2.46.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.45.3...v2.46.0) (2022-12-09)
+
+
+### Bug Fixes
+
+* Fix call to _module_provider_404 in example view ([14149f1](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/14149f1ba0e9ff4f1a849cee47151dc89d1ad612)), closes [#255](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/255)
+
+
+### Features
+
+* Add user groups and user groups namespace permissions, allowing SSO users to be delegated permissionsed per namespace
+* Add ability to delete user group permissions and user groups from UI ([1674817](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/1674817a59fb252fbe3b81d6d14c41fabc3fe6af)), closes [#255](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/255)
+* Add configurations to output debug for SAML2 and OpenID connect ([8248929](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/8248929bd89b894f97eb4dfcb1d713d09cb6d71a)), closes [#255](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/255)
+* Update authenticated endpoint to return list of namespace permissions ([4144c1b](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/4144c1bb45aa1585ac961a5f6a36026aaa54cf42)), closes [#255](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/255)
+
+## [2.45.3](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.45.2...v2.45.3) (2022-11-06)
+
+
+### Bug Fixes
+
+* Remove 'Description' from start of description in module provider cards in namespace list and search results ([8eba7c3](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/8eba7c31ca50aa132f6e59f7904143bfcf7b55f8)), closes [#263](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/263)
+
+## [2.45.2](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.45.1...v2.45.2) (2022-11-06)
+
+
+### Bug Fixes
+
+* Fix ZIP command in initial-setup page ([317f8c1](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/317f8c1c2a018a2227854faa6c5afbce1b8e58d3)), closes [#218](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/218)
+
+## [2.45.1](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.45.0...v2.45.1) (2022-11-05)
+
+
+### Bug Fixes
+
+* Handle multi-levels of indentation in README and other markdown tabs ([9b6bc26](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/9b6bc2694b9758cafe392bf309106305db964fba)), closes [#222](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/222)
+
+# [2.45.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.44.0...v2.45.0) (2022-10-29)
+
+
+### Features
+
+* Add support 'number' variable types in usage builder ([482d2aa](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/482d2aa321eefd0d1709ab7674221bbce33014cd))
+* Re-design usage builder ([228820e](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/228820e363b81e7ad32288f691756925d8ac3757)), closes [#264](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/264)
+* Update usage builder to provide multiple inputs when populating a list variable ([68859c5](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/68859c58d766a3d4083a7038409834101bbda20b))
+
+# [2.44.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.43.1...v2.44.0) (2022-10-07)
+
+
+### Bug Fixes
+
+* Update tfsec absolute path replacement to replace paths from the extraction directory. ([360b40a](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/360b40afae959d9331597cf81e5c7fc1119828e6)), closes [#228](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/228)
+
+
+### Features
+
+* Add tab listing security issues in module ([b62d8d7](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/b62d8d727a37f17e32332e29f3653dc9cfe55dfa)), closes [#228](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/228)
+* Add tab listing security issues in module ([a0bac97](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/a0bac9721761dd9190928c1d55f2dea08e7f43b6))
+* Add tab listing security issues in module ([b728c82](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/b728c8255663785b421ad9604bc11886fe715b57))
+
+## [2.43.1](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.43.0...v2.43.1) (2022-10-04)
+
+
+### Bug Fixes
+
+* Remove unused import, erroneously added in [#178](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/178) ([e5a00ad](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/e5a00adf8595ad5d00e5300734ac20a5628c9ed6)), closes [#262](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/262)
+
+# [2.43.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.42.0...v2.43.0) (2022-10-01)
+
+
+### Features
+
+* Add UI to create namespaces and API endpoint to create namespaces ([6e81668](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/6e816681771d45e89261f5e9440308922e9bcabb)), closes [#256](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/256)
+* Move namespaces into new table ([e01c820](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/e01c820316d45e9c962a9f738f166cfa388a9f6e)), closes [#178](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/178)
+* Update initial setup page to include step for creation of initial namespace ([dd40f13](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/dd40f13fc549cf682355b66c33895a5494ad3c15)), closes [#178](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/178)
+* Update module provider creation page to select namespace from pre-existing namespaces ([0e6bdac](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/0e6bdac34c88cf48fd1a9286f5fbea094f909c4f)), closes [#178](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/178)
+
+# [2.42.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.41.0...v2.42.0) (2022-10-01)
+
+
+### Bug Fixes
+
+* Fix logout icon ([cd343cb](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/cd343cbd58de011a9d67e182934512a1e8cc3d9f)), closes [#7](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/7)
+
+
+### Features
+
+* Implement OpenID and SAML authentication ([c611a7c](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/c611a7cb7c506c9744dd30c7acec8ea8ce0cad9a))
+
+# [2.41.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.40.4...v2.41.0) (2022-10-01)
+
+
+### Features
+
+* Provide ability to show unpublished and beta versions in UI. ([c844390](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/c844390742bd92eb77bc1a3dfed088e30b55dddb)), closes [#161](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/161)
+
+## [2.40.4](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.40.3...v2.40.4) (2022-09-29)
+
+
+### Bug Fixes
+
+* Add timeout for git clone command execution. ([4ee467c](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/4ee467c81e9e088ae4e29ddcef39a6e1352cf438)), closes [#256](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/256)
+* Fix bitbucket hook to return error when one or more tags fail to import ([8ac85ff](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/8ac85ffbece1cdfc987081dbe9572b83f2bb9cff)), closes [#256](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/256)
+* Stop auto-creation of module providers with Github/Bitbucket hook. ([1cf0a3b](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/1cf0a3b142b27e3800af4c5f23e0ac4fef33c47a)), closes [#256](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/256)
+* Update Bitbucket and Github hook endpoints to rollback database transactions when a single version fails to upload. ([3b63ecd](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/3b63ecd5483861c7f42c5bcfc065df24a448f9b7)), closes [#256](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/256)
+
+## [2.40.3](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.40.2...v2.40.3) (2022-09-27)
+
+
+### Bug Fixes
+
+* Update HTML title in pages to use customised application name, rather than 'Terrareg' ([5597c7c](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/5597c7c8e9958db0553a794dfd5411306ec74657)), closes [#240](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/240)
+
+## [2.40.2](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.40.1...v2.40.2) (2022-09-26)
+
+
+### Bug Fixes
+
+* Protect against Zip file contents that contain members outside of cwd. ([ba09762](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/ba09762a21415aadd8d62027d4edef006515e89c)), closes [#252](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/252)
+
+## [2.40.1](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.40.0...v2.40.1) (2022-09-22)
+
+
+### Bug Fixes
+
+* **ui:** Remove icon from yearly cost tag ([f7c3b0d](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/f7c3b0d3d3ae013722407260253327a4e33607c7)), closes [#235](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/235)
+
+# [2.40.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.39.2...v2.40.0) (2022-09-22)
+
+
+### Features
+
+* Order module search results by relevancy. ([fd9572e](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/fd9572edc4033c6ddf18948b07ef36dbc45a9a55)), closes [#241](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/241)
+
+## [2.39.2](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.39.1...v2.39.2) (2022-09-22)
+
+
+### Bug Fixes
+
+* **ui:** Update icon used for monthly example cost to money bill, rather than dollar ([2f15f37](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/2f15f378de43f655e1589fe7a557a40dee04617c)), closes [#235](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/235)
+
+## [2.39.1](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.39.0...v2.39.1) (2022-09-20)
+
+
+### Bug Fixes
+
+* **ui:** Hide 'Terrareg Exclusive' tag from Usage builder tab in module provider when this tag is disabled ([1e5b396](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/1e5b39609cbeaf9b2f0d8443c62c5daf9a30e402))
+
+# [2.39.0](https://gitlab.com/mrmattyboy/terrareg/compare/v2.38.0...v2.39.0) (2022-09-14)
+
+
+### Features
+
+* Add total major, minor and patch releases in prometheus metrics endpoint. ([b20a9ce](https://gitlab.com/mrmattyboy/terrareg/commit/b20a9ce7f372453cc402a27bd9543c98cd926abf))
+
+# [2.38.0](https://gitlab.com/mrmattyboy/terrareg/compare/v2.37.1...v2.38.0) (2022-09-14)
+
+
+### Features
+
+* Display custom module provider tabs in UI ([2034de0](https://gitlab.com/mrmattyboy/terrareg/commit/2034de0c727a6ed3dc8f450d966e3aacf58e4be5)), closes [#225](https://gitlab.com/mrmattyboy/terrareg/issues/225)
+* Update module extractor to extract tab files into new module version files table ([dd42187](https://gitlab.com/mrmattyboy/terrareg/commit/dd42187915bd631b3a1dcc733d495be28911138e)), closes [#225](https://gitlab.com/mrmattyboy/terrareg/issues/225)
+* Update terrareg module version API to return list of module version files. ([950a831](https://gitlab.com/mrmattyboy/terrareg/commit/950a831c277c6437e8596ad11ec181c5285683cc)), closes [#225](https://gitlab.com/mrmattyboy/terrareg/issues/225)
+
+## [2.37.1](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.37.0...v2.37.1) (2022-09-04)
+
+
+### Bug Fixes
+
+* **ui:** Add current example/submodule to breadcrumb in module provider page ([cb1d0fb](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/cb1d0fbe9cea3f346a1fd4e030919258798eb453)), closes [#233](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/233)
+
+# [2.37.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.36.1...v2.37.0) (2022-09-03)
+
+
+### Features
+
+* Sanitise data provided from module provider to ensure data is not injected into module provider page ([67d9a11](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/67d9a11146874409ae2ebc1f7add9186c57fe188)), closes [#242](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/242)
+
+## [2.36.1](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.36.0...v2.36.1) (2022-09-01)
+
+
+### Bug Fixes
+
+* Show cost of example when cost of example is 0 ([51e4a0b](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/51e4a0be67a073d08b762f0f4ab119d18e27692e)), closes [#233](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/233)
+
+# [2.36.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.35.0...v2.36.0) (2022-08-31)
+
+
+### Features
+
+* Update license of project to GNU GPL 3 ([1d963e6](https://gitlab.dockstudios.co.uk/pub/terrareg/commit/1d963e68955fa8545b1b899ea277b65053a4a590)), closes [#239](https://gitlab.dockstudios.co.uk/pub/terrareg/issues/239)
+
 # [2.35.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.34.1...v2.35.0) (2022-08-22)
 
 
@@ -364,6 +1029,9 @@
 
 # [2.14.0](https://gitlab.dockstudios.co.uk/pub/terrareg/compare/v2.13.1...v2.14.0) (2022-06-25)
 
+WARNING: This database change is non-downgradable, due to incorrect naming of previous foreign keys.
+
+If a downgrade from this version is required, the database must be restored from a pre-upgrade backup.
 
 ### Bug Fixes
 

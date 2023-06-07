@@ -1,20 +1,22 @@
 
+import json
 from unittest import mock
 
 import pytest
 from test.unit.terrareg import (
-    MockModuleProvider, MockModule, MockNamespace,
-    mocked_server_namespace_fixture,
+    mock_models,
     setup_test_data, TerraregUnitTest
 )
 from test import client
+import terrareg.models
+import terrareg.version_constraint
 
 
 class TestApiTerraregModuleProviderDetails(TerraregUnitTest):
     """Test ApiTerraregModuleProviderDetails resource."""
 
     @setup_test_data()
-    def test_existing_module_provider_no_custom_urls(self, client, mocked_server_namespace_fixture):
+    def test_existing_module_provider_no_custom_urls(self, client, mock_models):
         res = client.get('/v1/terrareg/modules/testnamespace/lonelymodule/testprovider')
 
         assert res.json == {
@@ -23,12 +25,13 @@ class TestApiTerraregModuleProviderDetails(TerraregUnitTest):
             'version': '1.0.0', 'provider': 'testprovider',
             'description': 'Mock description',
             'source': None,
+            'custom_links': [],
             'published_at': '2020-01-01T23:18:12',
             'downloads': 0, 'verified': True, 'trusted': False, 'internal': False,
             'root': {
                 'path': '', 'readme': 'Mock module README file',
                 'empty': False, 'inputs': [], 'outputs': [], 'dependencies': [],
-                'provider_dependencies': [], 'resources': []
+                'provider_dependencies': [], 'resources': [], 'modules': []
             },
             'submodules': [], 'providers': ['testprovider'], 'versions': ['1.0.0'],
             'display_source_url': None,
@@ -40,24 +43,103 @@ class TestApiTerraregModuleProviderDetails(TerraregUnitTest):
             'repo_browse_url_template': None,
             'repo_clone_url_template': None,
             'terraform_example_version_string': '1.0.0',
+            'terraform_example_version_comment': [],
+            'terraform_version_constraint': None,
             'beta': False,
             'published': True,
             'security_failures': 0,
-            'git_path': None
+            'security_results': None,
+            'git_path': None,
+            'additional_tab_files': {},
+            'graph_url': '/modules/testnamespace/lonelymodule/testprovider/1.0.0/graph',
+            'module_extraction_up_to_date': True,
+            'usage_example': (
+                'module "lonelymodule" {\n'
+                '  source  = '
+                '"localhost/my-tf-application__testnamespace/lonelymodule/testprovider"\n'
+                '  version = "1.0.0"\n'
+                '\n'
+                '  # Provide variables here\n'
+                '}'
+            )
         }
 
         assert res.status_code == 200
 
     @setup_test_data()
-    @pytest.mark.parametrize('security_issues_enabled,expected_security_issues', [
+    def test_existing_module_provider_with_custom_links(self, client, mock_models):
+        """Test endpoint with custom links configured"""
+
+        with mock.patch('terrareg.config.Config.MODULE_LINKS', json.dumps([
+                    {"text": "Placeholders in text module:{module} provider:{provider} ns:{namespace}",
+                     "url": "https://example.com/placeholders-in-link/{namespace}/{module}-{provider}/end"},
+                    {"text": "Link that does not apply",
+                     "url": "https://mydomain.example.com/",
+                     "namespaces": ["not-the-namespace", "another-namespace"]},
+                    {"text": "Link that applies to this namespace",
+                     "url": "https://applies-to-this-module.com",
+                     "namespaces": ["another-namespace", "testnamespace", "another-another-one"]}
+                ])):
+
+            res = client.get('/v1/terrareg/modules/testnamespace/lonelymodule/testprovider')
+
+            assert res.json.get("custom_links") == [
+                {"text": "Placeholders in text module:lonelymodule provider:testprovider ns:testnamespace",
+                 "url": "https://example.com/placeholders-in-link/testnamespace/lonelymodule-testprovider/end"},
+                {"text": "Link that applies to this namespace",
+                 "url": "https://applies-to-this-module.com"},
+            ]
+
+            assert res.status_code == 200
+
+    @setup_test_data()
+    @pytest.mark.parametrize('security_issues_enabled,expected_security_issues,expected_security_results', [
         # When security issues are enabled, 2 should be returned
-        (True, 2),
+        (True, 2, [{
+            'description': 'Secret explicitly uses the default key.',
+            'impact': 'Using AWS managed keys reduces the '
+                        'flexibility and control over the encryption '
+                        'key',
+            'links': ['https://aquasecurity.github.io/tfsec/v1.26.0/checks/aws/ssm/secret-use-customer-key/',
+                        'https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret#kms_key_id'],
+            'location': {'end_line': 4,
+                        'filename': 'main.tf',
+                        'start_line': 2},
+            'long_id': 'aws-ssm-secret-use-customer-key',
+            'resolution': 'Use customer managed keys',
+            'resource': 'aws_secretsmanager_secret.this',
+            'rule_description': 'Secrets Manager should use '
+                                'customer managed keys',
+            'rule_id': 'AVD-AWS-0098',
+            'rule_provider': 'aws',
+            'rule_service': 'ssm',
+            'severity': 'LOW',
+            'status': 0,
+            'warning': False},
+            {'description': 'Some security issue 2.',
+            'impact': 'Entire project is compromised',
+            'links': ['https://example.com/issuehere',
+                        'https://example.com/docshere'],
+            'location': {'end_line': 1,
+                        'filename': 'main.tf',
+                        'start_line': 6},
+            'long_id': 'dodgy-bad-is-bad',
+            'resolution': 'Do not use bad code',
+            'resource': 'some_data_resource.this',
+            'rule_description': 'Dodgy code should be removed',
+            'rule_id': 'DDG-ANC-001',
+            'rule_provider': 'bad',
+            'rule_service': 'code',
+            'severity': 'HIGH',
+            'status': 0,
+            'warning': False}
+        ]),
         # When security issues are disabled, 0 should be returned
-        (False, 0)
+        (False, 0, None)
     ])
     def test_existing_module_provider_with_security_issues(
             self, security_issues_enabled, expected_security_issues,
-            client, mocked_server_namespace_fixture):
+            expected_security_results, client, mock_models):
         """Test obtaining details about module provider with security issues"""
         with mock.patch('terrareg.config.Config.ENABLE_SECURITY_SCANNING', security_issues_enabled):
             res = client.get('/v1/terrareg/modules/testnamespace/withsecurityissues/testprovider')
@@ -68,12 +150,13 @@ class TestApiTerraregModuleProviderDetails(TerraregUnitTest):
                 'version': '1.0.0', 'provider': 'testprovider',
                 'description': 'Mock description',
                 'source': None,
+                'custom_links': [],
                 'published_at': '2020-01-01T23:18:12',
                 'downloads': 0, 'verified': False, 'trusted': False, 'internal': False,
                 'root': {
                     'path': '', 'readme': 'Mock module README file',
                     'empty': False, 'inputs': [], 'outputs': [], 'dependencies': [],
-                    'provider_dependencies': [], 'resources': []
+                    'provider_dependencies': [], 'resources': [], 'modules': []
                 },
                 'submodules': [], 'providers': ['testprovider'], 'versions': ['1.0.0'],
                 'display_source_url': None,
@@ -85,16 +168,40 @@ class TestApiTerraregModuleProviderDetails(TerraregUnitTest):
                 'repo_browse_url_template': None,
                 'repo_clone_url_template': None,
                 'terraform_example_version_string': '1.0.0',
+                'terraform_example_version_comment': [],
+                'terraform_version_constraint': None,
                 'beta': False,
                 'published': True,
                 'security_failures': expected_security_issues,
-                'git_path': None
+                'security_results': expected_security_results,
+                'git_path': None,
+                'additional_tab_files': {},
+                'graph_url': '/modules/testnamespace/withsecurityissues/testprovider/1.0.0/graph',
+                'module_extraction_up_to_date': True,
+                'usage_example': (
+                    'module "withsecurityissues" {\n'
+                    '  source  = '
+                    '"localhost/my-tf-application__testnamespace/withsecurityissues/testprovider"\n'
+                    '  version = "1.0.0"\n'
+                    '\n'
+                    '  # Provide variables here\n'
+                    '}'
+                )
             }
 
             assert res.status_code == 200
 
     @setup_test_data()
-    def test_existing_module_provider_with_git_provider_and_no_versions(self, client, mocked_server_namespace_fixture):
+    def test_terraform_example_version_comment(self, client, mock_models):
+        """Test example version comment is passed to API correctly"""
+        with mock.patch("terrareg.models.ModuleVersion.get_terraform_example_version_comment",
+                        mock.MagicMock(return_value=["a unit test", "comment value"])):
+            res = client.get('/v1/terrareg/modules/testnamespace/lonelymodule/testprovider')
+
+            assert res.json["terraform_example_version_comment"] == ["a unit test", "comment value"]
+
+    @setup_test_data()
+    def test_existing_module_provider_with_git_provider_and_no_versions(self, client, mock_models):
         """Test endpoint with module provider that is:
          - configured with a git provider
          - configured with a tag format
@@ -122,7 +229,7 @@ class TestApiTerraregModuleProviderDetails(TerraregUnitTest):
         assert res.status_code == 200
 
     @setup_test_data()
-    def test_existing_module_provider_with_custom_repo_urls_and_unpublished_version(self, client, mocked_server_namespace_fixture):
+    def test_existing_module_provider_with_custom_repo_urls_and_unpublished_version(self, client, mock_models):
         """Test endpoint with module provider that is:
          - configured with a custom repo URLs
          - has no published versions
@@ -149,7 +256,7 @@ class TestApiTerraregModuleProviderDetails(TerraregUnitTest):
         assert res.status_code == 200
 
     @setup_test_data()
-    def test_existing_module_provider_with_no_git_provider_or_custom_urls_and_only_beta_version(self, client, mocked_server_namespace_fixture):
+    def test_existing_module_provider_with_no_git_provider_or_custom_urls_and_only_beta_version(self, client, mock_models):
         """Test endpoint with module provider that is:
          - no custom repos URLS
          - no git provider
@@ -176,32 +283,56 @@ class TestApiTerraregModuleProviderDetails(TerraregUnitTest):
 
         assert res.status_code == 200
 
-    def test_non_existent_module_provider(self, client, mocked_server_namespace_fixture):
+    @setup_test_data()
+    def test_non_existent_module_provider(self, client, mock_models):
+        """Test endpoint with non-existent module"""
+
+        res = client.get('/v1/terrareg/modules/emptynamespace/unittestdoesnotexist/unittestproviderdoesnotexist')
+
+        assert res.json == {'message': 'Module provider does not exist'}
+        assert res.status_code == 400
+
+    @setup_test_data()
+    def test_non_existent_namespace(self, client, mock_models):
         """Test endpoint with non-existent module"""
 
         res = client.get('/v1/terrareg/modules/doesnotexist/unittestdoesnotexist/unittestproviderdoesnotexist')
 
-        assert res.json == {'errors': ['Not Found']}
-        assert res.status_code == 404
+        assert res.json == {'message': 'Namespace does not exist'}
+        assert res.status_code == 400
 
     @setup_test_data()
-    def test_analytics_token_not_converted(self, client, mocked_server_namespace_fixture):
+    def test_analytics_token_not_converted(self, client, mock_models):
         """Test endpoint with analytics token and ensure it doesn't convert the analytics token."""
 
         res = client.get('/v1/terrareg/modules/test_token-name__testnamespace/testmodulename/testprovider')
 
-        assert res.json == {'errors': ['Not Found']}
-        assert res.status_code == 404
+        assert res.json == {'message': 'Namespace does not exist'}
+        assert res.status_code == 400
 
     @setup_test_data()
-    def test_matches_terrareg_api_details_function(self, client, mocked_server_namespace_fixture):
+    def test_matches_terrareg_api_details_function(self, client, mock_models):
         """Test endpoint with analytics token"""
 
         res = client.get('/v1/terrareg/modules/testnamespace/testmodulename/testprovider')
 
-        test_namespace = MockNamespace(name='testnamespace')
-        test_module = MockModule(namespace=test_namespace, name='testmodulename')
-        test_module_provider = MockModuleProvider(module=test_module, name='testprovider')
+        test_namespace = terrareg.models.Namespace(name='testnamespace')
+        test_module = terrareg.models.Module(namespace=test_namespace, name='testmodulename')
+        test_module_provider = terrareg.models.ModuleProvider(module=test_module, name='testprovider')
 
-        assert res.json == test_module_provider.get_latest_version().get_terrareg_api_details()
+        assert res.json == test_module_provider.get_latest_version().get_terrareg_api_details(request_domain="localhost")
         assert res.status_code == 200
+
+    @setup_test_data()
+    def test_terraform_version_compatibility(self, client, mock_models):
+        """Test example version comment is passed to API correctly"""
+        with mock.patch("terrareg.version_constraint.VersionConstraint.is_compatible",
+                        mock.MagicMock(return_value=terrareg.version_constraint.VersionCompatibilityType.COMPATIBLE)) as mock_is_compatible, \
+                mock.patch("terrareg.models.ModuleVersion.get_terraform_version_constraints", mock.MagicMock(return_value="> 5.1.7, <= 9.2.2")):
+
+            res = client.get('/v1/terrareg/modules/testnamespace/testmodulename/testprovider?target_terraform_version=4.2.1')
+
+            assert res.json["version_compatibility"] == "compatible"
+
+            mock_is_compatible.assert_called_once_with(constraint='> 5.1.7, <= 9.2.2', target_version='4.2.1')
+

@@ -1,8 +1,13 @@
 
 import os
 import glob
+import urllib.parse
+
+import bleach
+from terrareg.markdown_link_modifier import markdown
 
 from terrareg.errors import TerraregError
+import terrareg.config
 
 
 class PathDoesNotExistError(TerraregError):
@@ -87,3 +92,70 @@ def check_subdirectory_within_base_dir(base_dir, sub_dir, is_dir=False, is_file=
 
     # Return absolute path of joined paths
     return os.path.abspath(real_sub_dir)
+
+
+def sanitise_html_content(text, allow_markdown_html=False):
+    """Sanitise HTML content to be returned via API to be displayed in UI"""
+    kwargs = {}
+    if allow_markdown_html:
+        kwargs['tags'] = frozenset({
+            # Original upstream configuration
+            'a', 'abbr', 'acronym', 'b', 'blockquote', 'code', 'em', 'i', 'li', 'ol', 'strong', 'ul',
+            # Custom allowed tags
+            'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table', 'thead', 'tbody', 'th', 'tr', 'td', 'pre', 'img'
+        })
+        kwargs['attributes'] = {
+            # Original upstream configuration
+            'a': [
+                'href',
+                'title',
+                'name',  # Custom allowed attribute for anchors
+                'id',  # Custom allowed attribute for anchors
+            ],
+            'acronym': ['title'],
+            'abbr': ['title'],
+            # Custom allowed attributes
+            'h1': ['id'], 'h2': ['id'], 'h3': ['id'],
+            'h4': ['id'], 'h5': ['id'], 'h6': ['id'],
+            'img': ['src']
+        }
+    return (
+        bleach.clean(
+            text, **kwargs
+        )
+        if text else
+        text
+    )
+
+
+def convert_markdown_to_html(file_name, markdown_html):
+    """Convert markdown to HTML"""
+    return markdown(
+        markdown_html,
+        file_name=file_name,
+        extensions=[
+            'fenced_code',
+            'tables',
+            'mdx_truly_sane_lists',
+            'terrareg.markdown_link_modifier']
+    )
+
+def get_public_url_details(fallback_domain=None):
+    """Get protocol, domain and port used to access terrareg."""
+    config = terrareg.config.Config()
+
+    # Set default values
+    domain = config.DOMAIN_NAME or fallback_domain
+    port = 443
+    protocol = 'https'
+
+    if config.PUBLIC_URL:
+        parsed_url = urllib.parse.urlparse(config.PUBLIC_URL)
+        # Only use values from parsed URL if it has a hostname,
+        # otherwise it is invalid
+        if parsed_url.hostname:
+            protocol = parsed_url.scheme or 'https'
+            port = parsed_url.port or (80 if protocol == 'http' else 443)
+            domain = parsed_url.hostname
+
+    return protocol, domain, port

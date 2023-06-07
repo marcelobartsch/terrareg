@@ -41,10 +41,11 @@ async function loadSetupPage(overrideHttpsCheck = false) {
 
     let config = await getConfig();
     $.get('/v1/terrareg/initial_setup', async (setupData) => {
-        let progressbar = $('setup-progress-bar');
-
         // Strike through environment variables that have been set
-        if (config.ADMIN_AUTHENTICATION_TOKEN_ENABLED) {
+        let authenticationEnabled = false;
+        if (config.ADMIN_LOGIN_ENABLED || config.SAML_ENABLED || config.OPENID_CONNECT_ENABLED) {
+            authenticationEnabled = true;
+
             setProgress(10);
             strikeThrough($('#setup-step-auth-vars-admin-authentication-token'));
         }
@@ -53,7 +54,7 @@ async function loadSetupPage(overrideHttpsCheck = false) {
             strikeThrough($('#setup-step-auth-vars-secret-key'));
         }
         // If either have not been set, open card and return
-        if ((! config.ADMIN_AUTHENTICATION_TOKEN_ENABLED) || (! config.SECRET_KEY_SET)) {
+        if ((! authenticationEnabled) || (! config.SECRET_KEY_SET)) {
             toggleSetupCard(getSetupCardByName('auth-vars'));
             return;
         }
@@ -68,13 +69,20 @@ async function loadSetupPage(overrideHttpsCheck = false) {
         setProgress(40);
 
         // Check if module has been created
+        if (! setupData.namespace_created) {
+            toggleSetupCard(getSetupCardByName('create-namespace'));
+            return;
+        }
+        setProgress(50);
+
+        // Check if module has been created
         if (! setupData.module_created) {
             toggleSetupCard(getSetupCardByName('create-module'));
             return;
         }
         setProgress(60);
 
-        // Populat integration URLs for module's indexing
+        // Populate integration URLs for module's indexing
         $('#module-integrations-link').attr('href', setupData.module_view_url + '#integrations');
         $('.module-upload-endpoint').each((itx, div) => {
             $(div).text(pathToUrl(setupData.module_upload_endpoint));
@@ -82,6 +90,17 @@ async function loadSetupPage(overrideHttpsCheck = false) {
         $('.module-publish-endpoint').each((itx, div) => {
             $(div).text(pathToUrl(setupData.module_publish_endpoint));
         });
+        // Populate API key header arguments
+        if (config.UPLOAD_API_KEYS_ENABLED) {
+            $('.module-upload-api-key-header-argument').each((itx, div) => {
+                $(div).text('-H "X-Terrareg-ApiKey: <Insert your UPLOAD_API_KEY>" ');
+            });
+        }
+        if (config.PUBLISH_API_KEYS_ENABLED) {
+            $('.module-publish-api-key-header-argument').each((itx, div) => {
+                $(div).text('-H "X-Terrareg-ApiKey: <Insert your PUBLISH_API_KEY>" ');
+            });
+        }
 
         // Check if module version has been indexed
         if (!setupData.version_indexed || !setupData.version_published) {
@@ -123,8 +142,20 @@ async function loadSetupPage(overrideHttpsCheck = false) {
             secureTasksRemaining += 1;
         }
 
+        // Check auto create namespace/module provider
+        if (! config.AUTO_CREATE_NAMESPACE) {
+            strikeThrough($('#setup-step-secure-auto-create-namespace'));
+        } else {
+            secureTasksRemaining += 1;
+        }
+        if (! config.AUTO_CREATE_MODULE_PROVIDER) {
+            strikeThrough($('#setup-step-secure-auto-create-module-provider'));
+        } else {
+            secureTasksRemaining += 1;
+        }
+
         if (secureTasksRemaining) {
-            setProgress(100 - (secureTasksRemaining * 10));
+            setProgress(100 - (secureTasksRemaining * 5));
             toggleSetupCard(getSetupCardByName('secure'));
             return;
         }

@@ -108,8 +108,20 @@ class RepositoryUrlDoesNotContainHostError(RepositoryUrlParseError):
     pass
 
 
-class RepositoryDoesNotContainPathError(RepositoryUrlParseError):
+class RepositoryUrlDoesNotContainPathError(RepositoryUrlParseError):
     """Repository URL does not contain path."""
+
+    pass
+
+
+class RepositoryUrlContainsInvalidPortError(RepositoryUrlParseError):
+    """Repository URL contains a invalid port."""
+
+    pass
+
+
+class RepositoryUrlContainsInvalidTemplateError(RepositoryUrlParseError):
+    """Repository URL contains invalid template."""
 
     pass
 
@@ -158,5 +170,47 @@ class GitCloneError(TerraregError):
 
 class InvalidBooleanConfigurationError(TerraregError):
     """Invalid boolean environment variable."""
+
+    pass
+
+
+class NamespaceAlreadyExistsError(TerraregError):
+    """A namespace already exists with the provided."""
+
+    pass
+
+
+class InvalidUserGroupNameError(TerraregError):
+    """User group name is invalid."""
+
+    pass
+
+
+class UnableToGetGlobalTerraformLockError(TerraregError):
+    """Unable to aquire thread lock whilst switching Terraform"""
+
+    pass
+
+
+class TerraformVersionSwitchError(TerraregError):
+    """An error occurred whilst switching Terraform versions"""
+
+    pass
+
+
+class ReindexingExistingModuleVersionsIsProhibitedError(TerraregError):
+    """Attempting to re-index a module version when re-indexing module versions is disabled."""
+
+    pass
+
+
+class InvalidNamespaceDisplayNameError(TerraregError):
+    """Namespace display name is invalid"""
+
+    pass
+
+
+class DuplicateNamespaceDisplayNameError(TerraregError):
+    """A namespace already exists with this display name"""
 
     pass
